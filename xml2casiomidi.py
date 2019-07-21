@@ -1,8 +1,6 @@
 from __future__ import division
 from mido import Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo
 from lxml import etree
-from io import StringIO, BytesIO
-from sortedcontainers import SortedDict
 
 notes_base_value = {'C':12,'D':14,'E':16,'F':17,'G':19,'A':21,'B':23}
 
@@ -33,9 +31,10 @@ for measure in part[0].xpath("measure"):
             staves = int(staves.text)
     direction = measure.find('direction')
     if direction is not None:
-        #sound = direction.find('sound')
-        #tempo = float(sound.get('tempo')) if sound is not None else 120
-        #sd.append({'tick':tick[0], 'event':MetaMessage('set_tempo', tempo=bpm2tempo(tempo))})
+        sound = direction.find('sound')
+        if sound is not None:
+            tempo = float(sound.get('tempo'))
+            sd.append({'tick':tick[0], 'event':MetaMessage('set_tempo', tempo=bpm2tempo(tempo))})
         if  direction.xpath('direction-type/rehearsal'):
             sd.append({'tick':tick[0], 'event':MetaMessage('marker', text="0")})
         
@@ -49,14 +48,11 @@ for measure in part[0].xpath("measure"):
         if staff is not None:
             staff = int(staff.text) - 1
 
-        if chord is None:
-            event_start[staff] = tick[staff]
-            tick[staff] += duration
-
         if rest is not None:
             tick[staff] += duration
-
         elif pitch is not None:
+            if chord is None:
+                event_start[staff] = tick[staff]
             step = pitch.find('step')
             step = step.text if step is not None else ''
             alter = pitch.find('alter')
@@ -69,6 +65,8 @@ for measure in part[0].xpath("measure"):
                               note=midi_value,
                               velocity=80,
                               time=0)})
+            if chord is None:
+                tick[staff] += duration
             sd.append({'tick':tick[staff],
                        'event': Message('note_off',
                                         channel=3 if staff == 0 else 2,

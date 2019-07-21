@@ -59,16 +59,14 @@ def xmlconversion(xml_file):
                 midi_events.append({'tick':event_start[staff], 'event':Message('note_on',
                                   channel=3 if staff == 0 else 2,
                                   note=midi_value,
-                                  velocity=80,
-                                  time=0)})
+                                  velocity=80)})
                 if chord is None:
                     tick[staff] += duration
-                midi_events.append({'tick':tick[staff],
+                midi_events.append({'tick':tick[staff]-1,
                            'event': Message('note_off',
                                             channel=3 if staff == 0 else 2,
                                             note=midi_value,
-                                            velocity=80,
-                                            time=duration)})
+                                            velocity=80)})
     return midi_events
 
 def write_midi(midi_events, midi_file):
@@ -86,14 +84,15 @@ def write_midi(midi_events, midi_file):
 def process_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("input")
-    parser.add_argument("output")   
-    args = parser.parse_args()    
+    parser.add_argument("output", nargs='?')   
+    args = parser.parse_args()
     return args
 
 def main():
     args = process_args()
     midi_events = xmlconversion(args.input)
-    write_midi(midi_events, args.output)
+    output = args.output if args.output is not None else args.input.rsplit('.', 1)[0]+".mid"  
+    write_midi(midi_events, output)
   
 if __name__== "__main__":
     main()

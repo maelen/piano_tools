@@ -9,14 +9,18 @@ notes_base_value = {'C':12, 'D':14, 'E':16, 'F':17, 'G':19, 'A':21, 'B':23}
 
 
 def xmlconversion(xml_file):
-    midi_events = []
+    midi_events = [{'divisions':768}]
     tree = etree.parse(xml_file)
     part = tree.xpath('/score-partwise/part')
     event_start = [0, 0]
     tick = [0, 0]
+    velocity = 90
     for measure in part[0].xpath("measure"):
         attributes = measure.find('attributes')
         if attributes is not None:
+            divisions = attributes.find('divisions')
+            if divisions is not None:
+                midi_events[0]['divisions'] = int(divisions.text)
             time = attributes.find('time')
             if time is not None:
                 numerator = int(time.find('beats').text)
@@ -33,8 +37,12 @@ def xmlconversion(xml_file):
         if direction is not None:
             sound = direction.find('sound')
             if sound is not None:
-                tempo = float(sound.get('tempo'))
-                midi_events.append({'tick':tick[0], 'event':MetaMessage('set_tempo', tempo=bpm2tempo(tempo))})
+                tempo = sound.get('tempo')
+                if tempo is not None:
+                    midi_events.append({'tick':tick[0], 'event':MetaMessage('set_tempo', tempo=bpm2tempo(float(tempo)))})
+                dynamics = sound.get('dynamics')
+                if dynamics is not None:
+                    velocity = int(round(float(dynamics) * 0.9))
             if  direction.xpath('direction-type/rehearsal'):
                 midi_events.append({'tick':tick[0], 'event':MetaMessage('marker', text="0")})
 
@@ -62,28 +70,29 @@ def xmlconversion(xml_file):
                 midi_events.append({'tick':event_start[staff], 'event':Message('note_on',
                                   channel=3 if staff == 0 else 2,
                                   note=midi_value,
-                                  velocity=80)})
+                                  velocity=velocity)})
                 if chord is None:
                     tick[staff] += duration
-                midi_events.append({'tick':tick[staff] - 1,
+                midi_events.append({'tick':tick[staff],
                            'event': Message('note_off',
                                             channel=3 if staff == 0 else 2,
                                             note=midi_value,
-                                            velocity=80)})
+                                            velocity=velocity)})
     return midi_events
 
 
 def write_midi(midi_events, midi_file):
-    division = 768
-    mid = MidiFile(type=0, ticks_per_beat=division)
     track = MidiTrack()
-    mid.tracks.append(track)
     previous_tick = 0
+    midi_attributes = midi_events[0]
+    midi_events = midi_events[1:]
     for entry in sorted(midi_events, key=lambda i: i['tick']) :
         updated_event = entry['event'].copy(time=entry['tick'] - previous_tick)
         track.append(updated_event)
         logging.info('E {}:{}'.format(entry['tick'], updated_event))
         previous_tick = entry['tick']
+    mid = MidiFile(type=0, ticks_per_beat=midi_attributes['divisions'])
+    mid.tracks.append(track)
     mid.save(midi_file)
 
 

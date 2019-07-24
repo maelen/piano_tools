@@ -13,7 +13,7 @@ def xmlconversion(xml_file):
     tree = etree.parse(xml_file)
     part = tree.xpath('/score-partwise/part')
     event_start = [0, 0]
-    tick = [0, 0]
+    tick = 0
     velocity = 90
     for measure in part[0].xpath("measure"):
         attributes = measure.find('attributes')
@@ -26,58 +26,63 @@ def xmlconversion(xml_file):
                 numerator = int(time.find('beats').text)
                 denominator = int(time.find('beat-type').text)
 
-                midi_events.append({'tick':tick[0], 'event':MetaMessage('time_signature',
+                midi_events.append({'tick':tick, 'event':MetaMessage('time_signature',
                           numerator=numerator,
                           denominator=denominator)})
             staves = attributes.find('staves')
             if staves is not None:
                 staves = int(staves.text)
 
-        direction = measure.find('direction')
-        if direction is not None:
+        directions = measure.findall('direction')
+        for direction in directions:
             sound = direction.find('sound')
             if sound is not None:
                 tempo = sound.get('tempo')
                 if tempo is not None:
-                    midi_events.append({'tick':tick[0], 'event':MetaMessage('set_tempo', tempo=bpm2tempo(float(tempo)))})
+                    midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(float(tempo)))})
                 dynamics = sound.get('dynamics')
                 if dynamics is not None:
                     velocity = int(round(float(dynamics) * 0.9))
             if  direction.xpath('direction-type/rehearsal'):
-                midi_events.append({'tick':tick[0], 'event':MetaMessage('marker', text="0")})
+                midi_events.append({'tick':tick, 'event':MetaMessage('marker', text="0")})
 
-        for note in measure.xpath("note"):
-            duration = note.find("duration")
+        for element in measure.xpath("note|backup|forward"):
+            duration = element.find("duration")
             duration = int(duration.text) if duration is not None else 0
-            staff = note.find('staff')
-            if staff is not None:
-                staff = int(staff.text) - 1
-            rest = note.find('rest')
-            pitch = note.find('pitch')
-            if rest is not None:
-                tick[staff] += duration
-            elif pitch is not None:
-                chord = note.find('chord')
-                if chord is None:
-                    event_start[staff] = tick[staff]
-                step = pitch.find('step')
-                step = step.text if step is not None else ''
-                alter = pitch.find('alter')
-                alter = int(alter.text) if alter is not None else 0
-                octave = pitch.find('octave')
-                octave = int(octave.text) if octave is not None else 0
-                midi_value = octave * 12 + notes_base_value[step] + alter
-                midi_events.append({'tick':event_start[staff], 'event':Message('note_on',
-                                  channel=3 if staff == 0 else 2,
-                                  note=midi_value,
-                                  velocity=velocity)})
-                if chord is None:
-                    tick[staff] += duration
-                midi_events.append({'tick':tick[staff],
-                           'event': Message('note_off',
-                                            channel=3 if staff == 0 else 2,
-                                            note=midi_value,
-                                            velocity=velocity)})
+            if element.tag == 'note':
+                staff = element.find('staff')
+                if staff is not None:
+                    staff = int(staff.text) - 1
+                rest = element.find('rest')
+                pitch = element.find('pitch')
+                if rest is not None:
+                    tick += duration
+                elif pitch is not None:
+                    chord = element.find('chord')
+                    if chord is None:
+                        event_start = tick
+                    step = pitch.find('step')
+                    step = step.text if step is not None else ''
+                    alter = pitch.find('alter')
+                    alter = int(alter.text) if alter is not None else 0
+                    octave = pitch.find('octave')
+                    octave = int(octave.text) if octave is not None else 0
+                    midi_value = octave * 12 + notes_base_value[step] + alter
+                    midi_events.append({'tick':event_start, 'event':Message('note_on',
+                                      channel=3 if staff == 0 else 2,
+                                      note=midi_value,
+                                      velocity=velocity)})
+                    if chord is None:
+                        tick += duration
+                    midi_events.append({'tick':tick,
+                               'event': Message('note_off',
+                                                channel=3 if staff == 0 else 2,
+                                                note=midi_value,
+                                                velocity=velocity)})
+            elif element.tag == 'forward':
+                tick += duration
+            elif element.tag == 'backup':
+                tick -= duration
     return midi_events
 
 

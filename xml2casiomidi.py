@@ -15,12 +15,15 @@ def xmlconversion(xml_file):
     event_start = [0, 0]
     tick = 0
     velocity = 90
+    multiplier = 1
     for measure in part[0].xpath("measure"):
         attributes = measure.find('attributes')
         if attributes is not None:
             divisions = attributes.find('divisions')
             if divisions is not None:
-                midi_events[0]['divisions'] = int(divisions.text)
+                division = int(divisions.text)
+                multiplier = 1  if division == 768 else 768 / division
+                midi_events[0]['divisions'] = int(division * multiplier)
             time = attributes.find('time')
             if time is not None:
                 numerator = int(time.find('beats').text)
@@ -42,13 +45,13 @@ def xmlconversion(xml_file):
                     midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(float(tempo)))})
                 dynamics = sound.get('dynamics')
                 if dynamics is not None:
-                    velocity = int(round(float(dynamics) * 0.9))
+                    velocity = int(round(float(dynamics)))
             if  direction.xpath('direction-type/rehearsal'):
                 midi_events.append({'tick':tick, 'event':MetaMessage('marker', text="0")})
 
         for element in measure.xpath("note|backup|forward"):
             duration = element.find("duration")
-            duration = int(duration.text) if duration is not None else 0
+            duration = int(int(duration.text) * multiplier) if duration is not None else 0
             if element.tag == 'note':
                 staff = element.find('staff')
                 if staff is not None:

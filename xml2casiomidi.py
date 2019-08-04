@@ -4,11 +4,15 @@ import logging
 import argparse
 from mido import Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo
 from lxml import etree
+import subprocess
+import tempfile
+import os
+import sys
 
 notes_base_value = {'C':12, 'D':14, 'E':16, 'F':17, 'G':19, 'A':21, 'B':23}
 
 
-def xmlconversion(xml_file):
+def midi_conversion(xml_file):
     midi_events = [{'divisions':768}]
     tree = etree.parse(xml_file)
     part = tree.xpath('/score-partwise/part')
@@ -116,9 +120,14 @@ def process_args():
 def main():
     args = process_args()
     logging.basicConfig(level=logging._nameToLevel[args.debug])
-    midi_events = xmlconversion(args.input)
-    output = args.output if args.output is not None else args.input.rsplit('.', 1)[0] + ".mid"
-    write_midi(midi_events, output)
+    if not os.path.isfile(args.input):
+        print("File does not exist: {}".format(args.input))
+        sys.exit(-1)
+    with tempfile.NamedTemporaryFile(suffix='.musicxml') as fp:
+        subprocess.run(["musescore", args.input, "-o", fp.name])
+        midi_events = midi_conversion(fp.name)
+        output = args.output if args.output is not None else args.input.rsplit('.', 1)[0] + ".mid"
+        write_midi(midi_events, output)
 
 
 if __name__ == "__main__":

@@ -62,30 +62,35 @@ def midi_conversion(xml_file):
                     staff = int(staff.text) - 1
                 rest = element.find('rest')
                 pitch = element.find('pitch')
+                tie_start = element.find('tie[@type="start"]')
+                tie_stop = element.find('tie[@type="stop"]')
                 if rest is not None:
                     tick += duration
-                elif pitch is not None:
-                    chord = element.find('chord')
-                    if chord is None:
-                        event_start = tick
-                    step = pitch.find('step')
-                    step = step.text if step is not None else ''
-                    alter = pitch.find('alter')
-                    alter = int(alter.text) if alter is not None else 0
-                    octave = pitch.find('octave')
-                    octave = int(octave.text) if octave is not None else 0
-                    midi_value = octave * 12 + notes_base_value[step] + alter
-                    midi_events.append({'tick':event_start, 'event':Message('note_on',
-                                      channel=3 if staff == 0 else 2,
-                                      note=midi_value,
-                                      velocity=velocity)})
-                    if chord is None:
-                        tick += duration
-                    midi_events.append({'tick':tick,
-                               'event': Message('note_off',
-                                                channel=3 if staff == 0 else 2,
-                                                note=midi_value,
-                                                velocity=velocity)})
+                else:
+                    if pitch is not None:
+                        chord = element.find('chord')
+                        if chord is None:
+                            event_start = tick
+                        step = pitch.find('step')
+                        step = step.text if step is not None else ''
+                        if tie_stop is None:
+                            alter = pitch.find('alter')
+                            alter = int(alter.text) if alter is not None else 0
+                            octave = pitch.find('octave')
+                            octave = int(octave.text) if octave is not None else 0
+                            midi_value = octave * 12 + notes_base_value[step] + alter
+                            midi_events.append({'tick':event_start, 'event':Message('note_on',
+                                              channel=3 if staff == 0 else 2,
+                                              note=midi_value,
+                                              velocity=velocity)})
+                        if chord is None:
+                            tick += duration
+                        if tie_start is None:
+                            midi_events.append({'tick':tick,
+                                       'event': Message('note_off',
+                                                        channel=3 if staff == 0 else 2,
+                                                        note=midi_value,
+                                                        velocity=velocity)})
             elif element.tag == 'forward':
                 tick += duration
             elif element.tag == 'backup':

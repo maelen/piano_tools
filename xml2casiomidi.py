@@ -16,7 +16,7 @@ def midi_conversion(xml_file):
     midi_events = [{'divisions':768}]
     tree = etree.parse(xml_file)
     part = tree.xpath('/score-partwise/part')
-    event_start = [0, 0]
+    event_start = 0
     tick = 0
     velocity = 90
     multiplier = 1
@@ -129,7 +129,7 @@ def main():
         print("File does not exist: {}".format(args.input))
         sys.exit(-1)
     with tempfile.NamedTemporaryFile(suffix='.musicxml') as fp:
-        subprocess.run(["musescore", args.input, "-o", fp.name])
+        subprocess.run(["musescore3", args.input, "-o", fp.name])
         midi_events = midi_conversion(fp.name)
         output = args.output if args.output is not None else args.input.rsplit('.', 1)[0] + ".mid"
         write_midi(midi_events, output)

@@ -1,0 +1,8 @@
+[Unit]
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/pedal-mapping.py
+
+[Install]
+WantedBy=multi-user.target

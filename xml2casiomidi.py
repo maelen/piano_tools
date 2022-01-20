@@ -2,113 +2,34 @@
 
 import logging
 import argparse
-from mido import MidiFile
+from mido import MidiFile, merge_tracks, second2tick
 import subprocess
 import tempfile
+import time
 import os
 import sys
 from midi_conversion import  MidiConversion
+from mma_conversion import  MmaConversion
 
-# notes_base_value = {'C':12, 'D':14, 'E':16, 'F':17, 'G':19, 'A':21, 'B':23}
-
-# def midi_conversion(xml_file):
-#     midi_events = [{'divisions':768}]
-#     tree = etree.parse(xml_file)
-#     part = tree.xpath('/score-partwise/part')
-#     event_start = 0
-#     tick = 0
-#     velocity = 90
-#     multiplier = 1
-#     for measure in part[0].xpath("measure"):
-#         attributes = measure.find('attributes')
-#         if attributes is not None:
-#             divisions = attributes.find('divisions')
-#             if divisions is not None:
-#                 division = int(divisions.text)
-#                 multiplier = 1  if division == 768 else 768 / division
-#                 midi_events[0]['divisions'] = int(division * multiplier)
-#             time = attributes.find('time')
-#             if time is not None:
-#                 numerator = int(time.find('beats').text)
-#                 denominator = int(time.find('beat-type').text)
-#
-#                 midi_events.append({'tick':tick, 'event':MetaMessage('time_signature',
-#                           numerator=numerator,
-#                           denominator=denominator)})
-#             staves = attributes.find('staves')
-#             if staves is not None:
-#                 staves = int(staves.text)
-#
-#         directions = measure.findall('direction')
-#         for direction in directions:
-#             sound = direction.find('sound')
-#             if sound is not None:
-#                 tempo = sound.get('tempo')
-#                 if tempo is not None:
-#                     midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(float(tempo)))})
-#                 dynamics = sound.get('dynamics')
-#                 if dynamics is not None:
-#                     velocity = int(round(float(dynamics)))
-#             if  direction.xpath('direction-type/rehearsal'):
-#                 midi_events.append({'tick':tick, 'event':MetaMessage('marker', text="0")})
-#
-#         for element in measure.xpath("note|backup|forward"):
-#             duration = element.find("duration")
-#             duration = int(int(duration.text) * multiplier) if duration is not None else 0
-#             if element.tag == 'note':
-#                 staff = element.find('staff')
-#                 if staff is not None:
-#                     staff = int(staff.text) - 1
-#                 rest = element.find('rest')
-#                 pitch = element.find('pitch')
-#                 tie_start = element.find('tie[@type="start"]')
-#                 tie_stop = element.find('tie[@type="stop"]')
-#                 if rest is not None:
-#                     tick += duration
-#                 else:
-#                     if pitch is not None:
-#                         chord = element.find('chord')
-#                         if chord is None:
-#                             event_start = tick
-#                         step = pitch.find('step')
-#                         step = step.text if step is not None else ''
-#                         if tie_stop is None:
-#                             alter = pitch.find('alter')
-#                             alter = int(alter.text) if alter is not None else 0
-#                             octave = pitch.find('octave')
-#                             octave = int(octave.text) if octave is not None else 0
-#                             midi_value = octave * 12 + notes_base_value[step] + alter
-#                             midi_events.append({'tick':event_start, 'event':Message('note_on',
-#                                               channel=3 if staff == 0 else 2,
-#                                               note=midi_value,
-#                                               velocity=velocity)})
-#                         if chord is None:
-#                             tick += duration
-#                         if tie_start is None:
-#                             midi_events.append({'tick':tick,
-#                                        'event': Message('note_off',
-#                                                         channel=3 if staff == 0 else 2,
-#                                                         note=midi_value,
-#                                                         velocity=velocity)})
-#             elif element.tag == 'forward':
-#                 tick += duration
-#             elif element.tag == 'backup':
-#                 tick -= duration
-#
-#     track = MidiTrack()
-#     previous_tick = 0
-#     midi_events = midi_events[1:]
-#     for entry in sorted(midi_events, key=lambda i: i['tick']) :
-#         updated_event = entry['event'].copy(time=entry['tick'] - previous_tick)
-#         track.append(updated_event)
-#         logging.info('E {}:{}'.format(entry['tick'], updated_event))
-#         previous_tick = entry['tick']
-#
-#     return track
-
+def merge_midi(mid1_filename, mid2_filename):
+    mid1 = MidiFile(mid1_filename, clip=True)
+    mid2 = MidiFile(mid2_filename, clip=True)
+    mid_list = []
+    mid_list.append(mid1)
+    mid_list.append(mid2)
+    merged_track = merge_tracks(mid_list)
+    merged_mid = MidiFile(type=1, ticks_per_beat=mid1.ticks_per_beat, clip=True)
+    merged_mid.tracks.append(merged_track)
+    tempo=500000
+    for message in merged_mid.tracks[0]:
+        if type(message.time) == float:
+            message.time = round(second2tick(second=message.time, ticks_per_beat=mid1.ticks_per_beat,tempo=tempo))
+        elif message.type == 'set_tempo':
+            tempo = message.tempo
+    return merged_mid
 
 def write_midi(track, midi_file):
-    midi_attributes = {'divisions':768}
+    midi_attributes = {'divisions':192}
     mid = MidiFile(type=0, ticks_per_beat=midi_attributes['divisions'])
     mid.tracks.append(track)
     mid.save(midi_file)
@@ -131,9 +52,18 @@ def main():
         sys.exit(-1)
     with tempfile.NamedTemporaryFile(suffix='.musicxml') as fp:
         subprocess.run(["musescore3", args.input, "-o", fp.name])
-        midi_track = MidiConversion.midi_conversion(fp.name)
-        output = args.output if args.output is not None else args.input.rsplit('.', 1)[0] + ".mid"
-        write_midi(midi_track, output)
+        midi_track = MidiConversion.midi_conversion(fp.name,192)
+        output = args.output if args.output is not None else args.input.rsplit('.', 1)[0]
+        write_midi(midi_track, f"{output}_mel.mid")
+        mma_file = open(f"{output}.mma", "w")
+        mma_file.write(MmaConversion.mma_conversion(fp.name))
+        mma_file.close()
+        subprocess.run(["mma", f"{output}.mma", "-xNOCREDIT", "-f", f"{output}_acc.mid"])
+        merged_mid = merge_midi(f"{output}_mel.mid", f"{output}_acc.mid")
+        merged_mid.save(f"{output}.mid")
+        print(f"{output}.mid has been created\n")
+        os.remove(f"{output}_acc.mid")
+        os.remove(f"{output}_mel.mid")
 
 
 if __name__ == "__main__":

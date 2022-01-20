@@ -5,29 +5,6 @@ from lxml import etree
 import multitimer
 
 
-class MidiHandler():
-
-    def __init__(self, port=None, bpm=None):
-        self.bpm = bpm
-        self.port = port
-        self.tick = 0
-        self.input_names = mido.get_input_names()
-        self.port = mido.open_input(port)
-        self.t = multitimer.MultiTimer(self.get_beat_time(), self.process_midi_events)
-
-    def __del__(self):
-        self.port.close()
-
-    def start(self):
-        self.t.start()
-
-    def get_beat_time(self):
-        return self.bpm / (768 * 60)
-
-    def process_midi_events(self):
-        self.tick += 1
-        for msg in self.port.iter_pending():
-            print(self.tick, msg)
 
 
 class MidiConversion:
@@ -35,8 +12,8 @@ class MidiConversion:
     notes_base_value = {'C':12, 'D':14, 'E':16, 'F':17, 'G':19, 'A':21, 'B':23}
 
     @classmethod
-    def midi_conversion(cls, xml_file):
-        midi_events = [{'divisions':768}]
+    def midi_conversion(cls, xml_file, num_ticks=192):
+        midi_events = [{'divisions':num_ticks}]
         tree = etree.parse(xml_file)
         part = tree.xpath('/score-partwise/part')
         event_start = 0
@@ -49,7 +26,7 @@ class MidiConversion:
                 divisions = attributes.find('divisions')
                 if divisions is not None:
                     division = int(divisions.text)
-                    multiplier = 1  if division == 768 else 768 / division
+                    multiplier = int(num_ticks // division)
                     midi_events[0]['divisions'] = int(division * multiplier)
                 time = attributes.find('time')
                 if time is not None:
@@ -73,8 +50,9 @@ class MidiConversion:
                     dynamics = sound.get('dynamics')
                     if dynamics is not None:
                         velocity = int(round(float(dynamics)))
-                if  direction.xpath('direction-type/rehearsal'):
-                    midi_events.append({'tick':tick, 'event':MetaMessage('marker', text="0")})
+                rehearsal = direction.xpath('direction-type/rehearsal')
+                if rehearsal:
+                    midi_events.append({'tick':tick, 'event':MetaMessage('marker', text=f'{rehearsal[0].text}')})
 
             for element in measure.xpath("note|backup|forward"):
                 duration = element.find("duration")

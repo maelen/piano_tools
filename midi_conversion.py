@@ -12,6 +12,16 @@ class MidiConversion:
     notes_base_value = {'C':12, 'D':14, 'E':16, 'F':17, 'G':19, 'A':21, 'B':23}
 
     @classmethod
+    def get_midi_note(cls,pitch=None):
+        step = pitch.find('step')
+        step = step.text if step is not None else ''
+        alter = pitch.find('alter')
+        alter = int(alter.text) if alter is not None else 0
+        octave = pitch.find('octave')
+        octave = int(octave.text) if octave is not None else 0
+        return octave * 12 + cls.notes_base_value[step] + alter        
+
+    @classmethod
     def midi_conversion(cls, xml_file, num_ticks=192):
         midi_events = [{'divisions':num_ticks}]
         tree = etree.parse(xml_file)
@@ -72,14 +82,8 @@ class MidiConversion:
                             chord = element.find('chord')
                             if chord is None:
                                 event_start = tick
-                            step = pitch.find('step')
-                            step = step.text if step is not None else ''
+                            midi_value = MidiConversion.get_midi_note(pitch)
                             if tie_stop is None:
-                                alter = pitch.find('alter')
-                                alter = int(alter.text) if alter is not None else 0
-                                octave = pitch.find('octave')
-                                octave = int(octave.text) if octave is not None else 0
-                                midi_value = octave * 12 + cls.notes_base_value[step] + alter
                                 midi_events.append({'tick':event_start, 'event':Message('note_on',
                                                   channel=3 if staff == 0 else 2,
                                                   note=midi_value,
@@ -87,11 +91,10 @@ class MidiConversion:
                             if chord is None:
                                 tick += duration
                             if tie_start is None:
-                                midi_events.append({'tick':tick,
-                                           'event': Message('note_off',
-                                                            channel=3 if staff == 0 else 2,
-                                                            note=midi_value,
-                                                            velocity=velocity)})
+                                midi_events.append({'tick':tick, 'event': Message('note_off',
+                                                   channel=3 if staff == 0 else 2,
+                                                   note=midi_value,
+                                                   velocity=velocity)})
                 elif element.tag == 'forward':
                     tick += duration
                 elif element.tag == 'backup':

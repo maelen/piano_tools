@@ -93,14 +93,14 @@ class MmaConversion:
                 elif element.tag == 'backup':
                     tick -= duration
                 current_beat=(tick-measure_start)/beat_duration
-            print(f"mn:{measure_number} t:{tick} bd:{beat_duration} cb:{current_beat}\n")
+            #print(f"mn:{measure_number} t:{tick} bd:{beat_duration} cb:{current_beat}\n")
             beat_adjust = ''
             if current_beat != numerator:                
                 truncate_side = "Side=Right" if measure_number == "0" and measure_implicit == "yes" else ""
                 current_measure=current_measure[slice(int(current_beat-numerator))]
                 mma_text += f"Truncate {current_beat} {truncate_side}\n"
                 current_measure = ['z'] if current_beat < 1 else ['z']*int(current_beat)
-                print(f"CM:{current_measure}")
+                #print(f"CM:{current_measure}")
             current_measure = [latest_chord if b == 'z' else b for b in current_measure ]            
             measure_text += f'{" ".join(current_measure)}\n'
             mma_text += measure_text

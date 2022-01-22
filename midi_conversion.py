@@ -19,7 +19,7 @@ class MidiConversion:
         alter = int(alter.text) if alter is not None else 0
         octave = pitch.find('octave')
         octave = int(octave.text) if octave is not None else 0
-        return octave * 12 + cls.notes_base_value[step] + alter        
+        return octave * 12 + cls.notes_base_value[step] + alter
 
     @classmethod
     def midi_conversion(cls, xml_file, num_ticks=192):
@@ -33,11 +33,13 @@ class MidiConversion:
         for measure in part[0].xpath("measure"):
             attributes = measure.find('attributes')
             if attributes is not None:
+                # Midi Divisions
                 divisions = attributes.find('divisions')
                 if divisions is not None:
                     division = int(divisions.text)
                     multiplier = int(num_ticks // division)
                     midi_events[0]['divisions'] = int(division * multiplier)
+                # Midi Time Signature
                 time = attributes.find('time')
                 if time is not None:
                     numerator = int(time.find('beats').text)
@@ -46,20 +48,20 @@ class MidiConversion:
                     midi_events.append({'tick':tick, 'event':MetaMessage('time_signature',
                               numerator=numerator,
                               denominator=denominator)})
-                staves = attributes.find('staves')
-                if staves is not None:
-                    staves = int(staves.text)
 
             directions = measure.findall('direction')
             for direction in directions:
                 sound = direction.find('sound')
                 if sound is not None:
+                    # Midi Tempo
                     tempo = sound.get('tempo')
                     if tempo is not None:
                         midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(float(tempo)))})
+                    # Set Midi Current Velocity
                     dynamics = sound.get('dynamics')
                     if dynamics is not None:
                         velocity = int(round(float(dynamics)))
+                # Midi Marker
                 rehearsal = direction.xpath('direction-type/rehearsal')
                 if rehearsal:
                     midi_events.append({'tick':tick, 'event':MetaMessage('marker', text=f'{rehearsal[0].text}')})

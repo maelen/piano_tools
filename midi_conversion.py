@@ -22,7 +22,9 @@ class MidiConversion:
         return octave * 12 + cls.notes_base_value[step] + alter
 
     @classmethod
-    def midi_conversion(cls, xml_file, num_ticks=192):
+    def midi_conversion(cls, xml_file, num_ticks=192, lesson_channel=3):
+        lh_channel=lesson_channel-1
+        rh_channel=lh_channel+1
         midi_events = [{'divisions':num_ticks}]
         tree = etree.parse(xml_file)
         part = tree.xpath('/score-partwise/part')
@@ -56,7 +58,7 @@ class MidiConversion:
                     # Midi Tempo
                     tempo = sound.get('tempo')
                     if tempo is not None:
-                        midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(float(tempo)))})
+                        midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(int(tempo)))})
                     # Set Midi Current Velocity
                     dynamics = sound.get('dynamics')
                     if dynamics is not None:
@@ -65,14 +67,14 @@ class MidiConversion:
                 rehearsal = direction.xpath('direction-type/rehearsal')
                 if rehearsal:
                     midi_events.append({'tick':tick, 'event':MetaMessage('marker', text=f'{rehearsal[0].text}')})
-
+            staff = 0
             for element in measure.xpath("note|backup|forward"):
                 duration = element.find("duration")
                 duration = int(int(duration.text) * multiplier) if duration is not None else 0
                 if element.tag == 'note':
-                    staff = element.find('staff')
-                    if staff is not None:
-                        staff = int(staff.text) - 1
+                    staff_el = element.find('staff')
+                    if staff_el is not None:
+                        staff = int(staff_el.text) - 1
                     rest = element.find('rest')
                     pitch = element.find('pitch')
                     tie_start = element.find('tie[@type="start"]')
@@ -87,14 +89,14 @@ class MidiConversion:
                             midi_value = MidiConversion.get_midi_note(pitch)
                             if tie_stop is None:
                                 midi_events.append({'tick':event_start, 'event':Message('note_on',
-                                                  channel=3 if staff == 0 else 2,
+                                                  channel=rh_channel if staff == 0 else lh_channel,
                                                   note=midi_value,
                                                   velocity=velocity)})
                             if chord is None:
                                 tick += duration
                             if tie_start is None:
                                 midi_events.append({'tick':tick, 'event': Message('note_off',
-                                                   channel=3 if staff == 0 else 2,
+                                                   channel=rh_channel if staff == 0 else lh_channel,
                                                    note=midi_value,
                                                    velocity=velocity)})
                 elif element.tag == 'forward':

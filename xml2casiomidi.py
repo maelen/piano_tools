@@ -39,6 +39,7 @@ def process_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("input")
     parser.add_argument("output", nargs='?')
+    parser.add_argument("-c", "--channel", type=int, default=3)
     parser.add_argument("-d", "--debug", default="WARN")
     args = parser.parse_args()
     return args
@@ -51,14 +52,22 @@ def main():
         print("File does not exist: {}".format(args.input))
         sys.exit(-1)
     with tempfile.NamedTemporaryFile(suffix='.musicxml') as fp:
-        subprocess.run(["musescore3", args.input, "-o", fp.name])
-        midi_track = MidiConversion.midi_conversion(fp.name,192)
+        try:
+            subprocess.run(["musescore3", args.input, "-o", fp.name])
+        except:
+            print("Partition midi file not generated. Is musescore in your search path ?")
+            sys.exit(1)
+        midi_track = MidiConversion.midi_conversion(fp.name,192,args.channel)
         output = args.output if args.output is not None else args.input.rsplit('.', 1)[0]
         write_midi(midi_track, f"{output}_mel.mid")
         mma_file = open(f"{output}.mma", "w")
         mma_file.write(MmaConversion.mma_conversion(fp.name))
         mma_file.close()
-        subprocess.run(["mma", f"{output}.mma", "-xNOCREDIT", "-f", f"{output}_acc.mid"])
+        try:
+            subprocess.run(["mma", f"{output}.mma", "-xNOCREDIT", "-f", f"{output}_acc.mid"])
+        except:
+            print("Accompaniment not generated. Is mma in your search path ?")
+            sys.exit(1)
         merged_mid = merge_midi(f"{output}_mel.mid", f"{output}_acc.mid")
         merged_mid.save(f"{output}.mid")
         print(f"{output}.mid has been created\n")

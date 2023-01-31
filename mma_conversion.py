@@ -4,20 +4,50 @@ from lxml import etree
 class MmaConversion:
 
     @classmethod
+    def get_metronome_sequence(cls, numerator, denominator):
+        if numerator % 2 == 0:
+            m_low_str = f"M1 * {numerator//2}"
+            m_hi_str = f"M_Low Shift 1"
+        else:
+            m_low_str = f"M1"
+            m_hi_str = ""
+            for i in range(1,numerator):
+                m_hi_str += f"M1 shift {i};"
+
+        text = f"""
+SeqClear
+Seqsize 1
+
+Time {numerator}
+Timesig {numerator} {denominator}
+
+Begin Drum Define
+    M1 1 0 90
+    M_Low {m_low_str}
+    M_Hi  {m_hi_str}
+End
+
+Begin Drum-Low
+  Sequence  M_Low
+  Tone  LowWoodBlock
+End
+
+Begin Drum-Hi
+  Sequence  M_Hi
+  Tone HighWoodBlock
+End
+
+DefGroove custom_metronome_{numerator}_{denominator}
+      \n"""
+        return text
+
+    @classmethod
     def get_groove(cls, numerator, denominator):
-        text=''
-        if numerator == 2:
-            if denominator == 2:
-                text += 'Groove Metronome2\nVolume ppp\n'
-            elif denominator == 4:
-                text += 'Groove Metronome24\nVolume ppp\n'
-        elif numerator == 3:
-            text += 'Groove Metronome3\nVolume ppp\n'
-        elif numerator == 4:
-            text += 'Groove Metronome4\nVolume ppp\n'
-        elif numerator == 6:
-            text += 'Groove Metronome68\nVolume ppp\n'
-        text += f"TimeSig {numerator} {denominator}\n"
+        text = f"""
+Groove custom_metronome_{numerator}_{denominator}
+Timesig {numerator} {denominator}
+Volume ppp
+      \n"""
         return text
 
     @classmethod
@@ -25,9 +55,13 @@ class MmaConversion:
         tree = etree.parse(xml_file)
         part = tree.xpath('/score-partwise/part')
         tick = 0
+        mma_header =  ''
+        metronome_seq = {}
         mma_text = ''
         latest_chord = 'z'
-        tempo = 0
+        tempo = None
+        numerator = 4
+        denominator = 4
         for measure in part[0].xpath("measure"):
             measure_number=f"{measure.attrib['number']}"
             measure_implicit=f"{measure.attrib['implicit']}" if "implicit" in measure.attrib else "no"
@@ -42,8 +76,8 @@ class MmaConversion:
                     numerator = int(time.find('beats').text)
                     denominator = int(time.find('beat-type').text)
                     beat_duration=division*4/denominator
-                    groove_str = cls.get_groove(numerator,denominator)
-                    mma_text += groove_str
+                    metronome_seq[f"custom_metronome_{numerator}_{denominator}"] = cls.get_metronome_sequence(numerator,denominator)
+                    mma_text += cls.get_groove(numerator,denominator)
                 staves = attributes.find('staves')
                 if staves is not None:
                     staves = int(staves.text)
@@ -66,6 +100,10 @@ class MmaConversion:
             staff = 0
             current_measure=['z']*numerator
             current_beat=0
+            if tempo is None:
+                tempo = 120*(denominator/4)
+                tempo_str = f"Tempo {tempo}\n"
+                mma_text += tempo_str
             for element in measure.xpath("note|harmony|backup|forward"):
                 duration = element.find("duration")
                 duration = int(duration.text) if duration is not None else 0
@@ -86,8 +124,8 @@ class MmaConversion:
                     root_step=element.find('root').find('root-step')
                     kind=element.find('kind').text
                     kind='m' if kind == 'minor' else ''
-                    latest_chord = f'{root_step.text}{kind}' 
-                    current_measure[int(current_beat)] = latest_chord     
+                    latest_chord = f'{root_step.text}{kind}'
+                    current_measure[int(current_beat)] = latest_chord
                 elif element.tag == 'forward':
                     tick += duration
                 elif element.tag == 'backup':
@@ -95,16 +133,16 @@ class MmaConversion:
                 current_beat=(tick-measure_start)/beat_duration
             #print(f"mn:{measure_number} t:{tick} bd:{beat_duration} cb:{current_beat}\n")
             beat_adjust = ''
-            if current_beat != numerator:                
+            if current_beat != numerator:
                 truncate_side = "Side=Right" if measure_number == "0" and measure_implicit == "yes" else ""
                 current_measure=current_measure[slice(int(current_beat-numerator))]
                 mma_text += f"Truncate {current_beat} {truncate_side}\n"
                 current_measure = ['z'] if current_beat < 1 else ['z']*int(current_beat)
                 #print(f"CM:{current_measure}")
-            current_measure = [latest_chord if b == 'z' else b for b in current_measure ]            
+            current_measure = [latest_chord if b == 'z' else b for b in current_measure ]
             measure_text += f'{" ".join(current_measure)}\n'
             mma_text += measure_text
             if denominator == 2:
-                mma_text += measure_text 
+                mma_text += measure_text
 
-        return mma_text
+        return mma_header + "\n".join(list(metronome_seq.values())) + mma_text

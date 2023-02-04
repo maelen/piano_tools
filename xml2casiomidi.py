@@ -40,6 +40,7 @@ def process_args():
     parser.add_argument("input")
     parser.add_argument("output", nargs='?')
     parser.add_argument("-c", "--channel", type=int, default=3)
+    parser.add_argument("-r", "--repeat_chord", action='store_true')
     parser.add_argument("-d", "--debug", default="WARN")
     args = parser.parse_args()
     return args
@@ -61,7 +62,7 @@ def main():
         output = args.output if args.output is not None else args.input.rsplit('.', 1)[0]
         write_midi(midi_track, f"{output}_mel.mid")
         mma_file = open(f"{output}.mma", "w")
-        mma_file.write(MmaConversion.mma_conversion(fp.name))
+        mma_file.write(MmaConversion.mma_conversion(fp.name, repeat_chord=args.repeat_chord))
         mma_file.close()
         try:
             subprocess.run(["mma", f"{output}.mma", "-xNOCREDIT", "-f", f"{output}_acc.mid"])

@@ -21,6 +21,9 @@ Seqsize 1
 Time {numerator}
 Timesig {numerator} {denominator}
 
+Chord Define simple_chord 1 1 100 * {numerator}
+Chord Sequence simple_chord
+
 Begin Drum Define
     M1 1 0 90
     M_Low {m_low_str}
@@ -51,14 +54,13 @@ Volume ppp
         return text
 
     @classmethod
-    def mma_conversion(cls, xml_file):
+    def mma_conversion(cls, xml_file, repeat_chord=False):
         tree = etree.parse(xml_file)
         part = tree.xpath('/score-partwise/part')
         tick = 0
         mma_header =  ''
         metronome_seq = {}
         mma_text = ''
-        latest_chord = 'z'
         tempo = None
         numerator = 4
         denominator = 4
@@ -121,11 +123,36 @@ Volume ppp
                             if chord is None:
                                 tick += duration
                 elif element.tag == 'harmony' and staff == 0 and (tick%beat_duration) == 0:
-                    root_step=element.find('root').find('root-step')
-                    kind=element.find('kind').text
-                    kind='m' if kind == 'minor' else ''
-                    latest_chord = f'{root_step.text}{kind}'
-                    current_measure[int(current_beat)] = latest_chord
+                    root_step=element.find('root').find('root-step').text
+                    kind=element.find('kind').get('text')
+                    if kind is None or kind == 'major':
+                      kind=''
+                    elif kind == 'minor':
+                      kind='m'
+                    root_alter=element.find('root').find('root-alter')
+                    if root_alter is not None:
+                      root_alter = int(root_alter.text)
+                      if root_alter == 1:
+                        root_alter = '#'
+                      elif root_alter == -1:
+                        root_alter = 'b'
+                    else:
+                      root_alter = ''
+                    latest_chord = f'{root_step}{root_alter}{kind}'
+                    bass = element.find('bass')
+                    if bass is not None:
+                      bass_step=element.find('bass').find('bass-step').text
+                      bass_alter=element.find('bass').find('bass-alter')
+                      if bass_alter is not None:
+                        bass_alter = int(bass_alter.text)
+                        if bass_alter == 1:
+                          bass_alter='#'
+                        elif bass_alter == -1:
+                          bass_alter='b'
+                      else:
+                        bass_alter = ''
+                      latest_chord += f'/{bass_step}{bass_alter}'
+                    current_measure[int(current_beat)] = f'{latest_chord}'
                 elif element.tag == 'forward':
                     tick += duration
                 elif element.tag == 'backup':
@@ -139,7 +166,8 @@ Volume ppp
                 mma_text += f"Truncate {current_beat} {truncate_side}\n"
                 current_measure = ['z'] if current_beat < 1 else ['z']*int(current_beat)
                 #print(f"CM:{current_measure}")
-            current_measure = [latest_chord if b == 'z' else b for b in current_measure ]
+            if repeat_chord and current_measure.count('z') == numerator:
+                current_measure[0] = latest_chord
             measure_text += f'{" ".join(current_measure)}\n'
             mma_text += measure_text
             if denominator == 2:

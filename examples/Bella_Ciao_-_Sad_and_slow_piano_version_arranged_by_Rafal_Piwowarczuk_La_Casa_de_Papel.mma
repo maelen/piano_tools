@@ -1,0 +1,75 @@
+
+SeqClear
+Seqsize 1
+
+Time 4
+Timesig 4 4
+
+Chord Define simple_chord 1 1 100 * 4
+Chord Sequence simple_chord
+
+Begin Drum Define
+    M1 1 0 90
+    M_Low M1 * 2
+    M_Hi  M_Low Shift 1
+End
+
+Begin Drum-Low
+  Sequence  M_Low
+  Tone  LowWoodBlock
+End
+
+Begin Drum-Hi
+  Sequence  M_Hi
+  Tone HighWoodBlock
+End
+
+DefGroove custom_metronome_4_4
+      
+
+Groove custom_metronome_4_4
+Timesig 4 4
+Volume ppp
+      
+Tempo 65.0
+1 z z z z
+2 z z z z
+3 z z z z
+4 z z z z
+5 z z z z
+6 z z z z
+7 z z z z
+8 z z z z
+9 z z z z
+10 z z z z
+11 z z z z
+12 z z z z
+13 z z z z
+14 z z z z
+15 z z z z
+16 z z z z
+17 z z z z
+18 z z z z
+19 z z z z
+20 z z z z
+21 z z z z
+22 z z z z
+23 z z z z
+24 z z z z
+25 z z z z
+26 z z z z
+27 z z z z
+28 z z z z
+29 z z z z
+30 z z z z
+31 z z z z
+32 z z z z
+33 z z z z
+34 z z z z
+35 z z z z
+36 z z z z
+37 z z z z
+38 z z z z
+39 z z z z
+40 z z z z
+41 z z z z

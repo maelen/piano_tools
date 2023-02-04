@@ -184,9 +184,10 @@ Volume ppp
                 truncate_side = "Side=Right" if measure_number == "0" and measure_implicit == "yes" else ""
                 current_measure=current_measure[slice(int(current_beat-numerator))]
                 mma_text += f"Truncate {current_beat} {truncate_side}\n"
-                current_measure = ['z'] if current_beat < 1 else ['z']*int(current_beat)
+                if current_beat < 1:
+                  current_measure = [latest_chord]
                 #print(f"CM:{current_measure}")
-            if repeat_chord and current_measure.count('z') == numerator:
+            if repeat_chord and current_measure.count('z') == len(current_measure):
                 current_measure[0] = latest_chord
             measure_text += f'{" ".join(current_measure)}\n'
             mma_text += measure_text

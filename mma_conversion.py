@@ -54,6 +54,44 @@ Volume ppp
         return text
 
     @classmethod
+    def convert_kind(cls, kind):
+      if kind is None or kind == 'major':
+        kind=''
+      elif kind == 'minor':
+        kind='m'
+      return kind
+
+    @classmethod
+    def convert_alter(cls, alter):
+      if alter is not None:
+        alter = int(alter.text)
+        if alter == 1:
+          alter = '#'
+        elif alter == -1:
+          alter = 'b'
+        else:
+          alter = ''
+      else:
+        alter = ''
+      return alter
+
+    @classmethod
+    def convert_degree(cls, degree):
+      if degree is not None:
+        degree_value = int(degree.find('degree-value').text)
+        degree_type = degree.find('degree-type').get('text')
+        if degree_type is None:
+          if degree_value == 7:
+            degree_type = ''
+          elif degree_value > 7:
+            degree_type = 'add'
+        degree_alter = cls.convert_alter(degree.find('degree-alter'))
+        degree = f'{degree_type}{degree_alter}{degree_value}'
+      else:
+        degree = ''
+      return degree
+
+    @classmethod
     def mma_conversion(cls, xml_file, repeat_chord=False):
         tree = etree.parse(xml_file)
         part = tree.xpath('/score-partwise/part')
@@ -124,33 +162,14 @@ Volume ppp
                                 tick += duration
                 elif element.tag == 'harmony' and staff == 0 and (tick%beat_duration) == 0:
                     root_step=element.find('root').find('root-step').text
-                    kind=element.find('kind').get('text')
-                    if kind is None or kind == 'major':
-                      kind=''
-                    elif kind == 'minor':
-                      kind='m'
-                    root_alter=element.find('root').find('root-alter')
-                    if root_alter is not None:
-                      root_alter = int(root_alter.text)
-                      if root_alter == 1:
-                        root_alter = '#'
-                      elif root_alter == -1:
-                        root_alter = 'b'
-                    else:
-                      root_alter = ''
-                    latest_chord = f'{root_step}{root_alter}{kind}'
+                    kind=cls.convert_kind(element.find('kind').get('text'))
+                    root_alter=cls.convert_alter(element.find('root').find('root-alter'))
+                    degree = cls.convert_degree(element.find('degree'))
+                    latest_chord = f'{root_step}{root_alter}{kind}{degree}'
                     bass = element.find('bass')
                     if bass is not None:
                       bass_step=element.find('bass').find('bass-step').text
-                      bass_alter=element.find('bass').find('bass-alter')
-                      if bass_alter is not None:
-                        bass_alter = int(bass_alter.text)
-                        if bass_alter == 1:
-                          bass_alter='#'
-                        elif bass_alter == -1:
-                          bass_alter='b'
-                      else:
-                        bass_alter = ''
+                      bass_alter=cls.convert_alter(element.find('bass').find('bass-alter'))
                       latest_chord += f'/{bass_step}{bass_alter}'
                     current_measure[int(current_beat)] = f'{latest_chord}'
                 elif element.tag == 'forward':

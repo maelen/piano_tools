@@ -37,11 +37,12 @@ def write_midi(track, midi_file):
 
 def process_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("input")
-    parser.add_argument("output", nargs='?')
-    parser.add_argument("-c", "--channel", type=int, default=3)
-    parser.add_argument("-r", "--repeat_chord", action='store_true')
-    parser.add_argument("-d", "--debug", default="WARN")
+    parser.add_argument("input", help="musicxml or musescore input file")
+    parser.add_argument("output", nargs='?', help="optional output file if not using default")
+    parser.add_argument("-c", "--channel", type=int, default=3, help="Midi channel used for left hand. Right hand uses next channel")
+    parser.add_argument("-nr", "--norepeat", action='store_false', help="Don't reuse last chord for next measures")
+    parser.add_argument("-w", "--overwrite", action='store_true', help="Regenerate accompaniment mma file even if it exists")
+    parser.add_argument("-d", "--debug", default="WARN", help="Select log level used for debugging")
     args = parser.parse_args()
     return args
 
@@ -61,9 +62,10 @@ def main():
         midi_track = MidiConversion.midi_conversion(fp.name,192,args.channel)
         output = args.output if args.output is not None else args.input.rsplit('.', 1)[0]
         write_midi(midi_track, f"{output}_mel.mid")
-        mma_file = open(f"{output}.mma", "w")
-        mma_file.write(MmaConversion.mma_conversion(fp.name, repeat_chord=args.repeat_chord))
-        mma_file.close()
+        if args.overwrite or not os.path.exists(f"{output}.mma"):
+          mma_file = open(f"{output}.mma", "w")
+          mma_file.write(MmaConversion.mma_conversion(fp.name, repeat_chord=args.norepeat))
+          mma_file.close()
         try:
             subprocess.run(["mma", f"{output}.mma", "-xNOCREDIT", "-f", f"{output}_acc.mid"])
         except:

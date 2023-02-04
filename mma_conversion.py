@@ -102,6 +102,7 @@ Volume ppp
         tempo = None
         numerator = 4
         denominator = 4
+        latest_chord = 'z'
         for measure in part[0].xpath("measure"):
             measure_number=f"{measure.attrib['number']}"
             measure_implicit=f"{measure.attrib['implicit']}" if "implicit" in measure.attrib else "no"

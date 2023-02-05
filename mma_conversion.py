@@ -4,56 +4,6 @@ from lxml import etree
 class MmaConversion:
 
     @classmethod
-    def get_metronome_sequence(cls, numerator, denominator):
-        if numerator % 2 == 0:
-            m_low_str = f"M1 * {numerator//2}"
-            m_hi_str = f"M_Low Shift 1"
-        else:
-            m_low_str = f"M1"
-            m_hi_str = ""
-            for i in range(1,numerator):
-                m_hi_str += f"M1 shift {i};"
-
-        text = f"""
-SeqClear
-Seqsize 1
-
-Time {numerator}
-Timesig {numerator} {denominator}
-
-Chord Define simple_chord 1 1 100 * {numerator}
-Chord Sequence simple_chord
-
-Begin Drum Define
-    M1 1 0 90
-    M_Low {m_low_str}
-    M_Hi  {m_hi_str}
-End
-
-Begin Drum-Low
-  Sequence  M_Low
-  Tone  LowWoodBlock
-End
-
-Begin Drum-Hi
-  Sequence  M_Hi
-  Tone HighWoodBlock
-End
-
-DefGroove custom_metronome_{numerator}_{denominator}
-      \n"""
-        return text
-
-    @classmethod
-    def get_groove(cls, numerator, denominator):
-        text = f"""
-Groove custom_metronome_{numerator}_{denominator}
-Timesig {numerator} {denominator}
-Volume ppp
-      \n"""
-        return text
-
-    @classmethod
     def convert_kind(cls, kind):
       if kind is None or kind == 'major':
         kind=''
@@ -191,7 +141,57 @@ Volume ppp
                 current_measure[0] = latest_chord
             measure_text += f'{" ".join(current_measure)}\n'
             mma_text += measure_text
-            if denominator == 2:
-                mma_text += measure_text
 
         return mma_header + "\n".join(list(metronome_seq.values())) + mma_text
+
+    @classmethod
+    def get_metronome_sequence(cls, numerator, denominator):
+        if numerator % 2 == 0:
+            m_low_str = f"M1 * {numerator//2}"
+            m_hi_str = f"M_Low Shift 1"
+        else:
+            m_low_str = f"M1"
+            m_hi_str = ""
+            for i in range(1,numerator):
+                m_hi_str += f"M1 shift {i};"
+
+        text = \
+f"""
+SeqClear
+Seqsize 1
+
+Time {numerator}
+Timesig {numerator} {denominator}
+
+Chord Define simple_chord 1 1 100 * {numerator}
+Chord Sequence simple_chord
+
+Begin Drum Define
+    M1 1 0 90
+    M_Low {m_low_str}
+    M_Hi  {m_hi_str}
+End
+
+Begin Drum-Low
+  Sequence  M_Low
+  Tone  LowWoodBlock
+End
+
+Begin Drum-Hi
+  Sequence  M_Hi
+  Tone HighWoodBlock
+End
+
+DefGroove custom_metronome_{numerator}_{denominator}
+\n"""
+        return text
+
+    @classmethod
+    def get_groove(cls, numerator, denominator):
+        text = \
+f"""
+Groove custom_metronome_{numerator}_{denominator}
+Timesig {numerator} {denominator}
+Volume ppp
+\n"""
+        return text

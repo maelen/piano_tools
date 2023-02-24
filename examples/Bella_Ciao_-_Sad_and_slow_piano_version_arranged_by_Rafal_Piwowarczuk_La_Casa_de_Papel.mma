@@ -25,12 +25,12 @@ Begin Drum-Hi
 End
 
 DefGroove custom_metronome_4_4
-      
+
 
 Groove custom_metronome_4_4
 Timesig 4 4
 Volume ppp
-      
+
 Tempo 65.0
 1 z z z z
 2 z z z z

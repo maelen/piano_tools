@@ -111,7 +111,7 @@ class MmaConversion:
                             chord = element.find('chord')
                             if chord is None:
                                 tick += duration
-                elif element.tag == 'harmony' and staff == 0 and (tick%beat_duration) == 0:
+                elif element.tag == 'harmony' and staff == 0 and ((tick-measure_start)%beat_duration) == 0:
                     root_step=element.find('root').find('root-step').text
                     kind=cls.convert_kind(element.find('kind').get('text'))
                     root_alter=cls.convert_alter(element.find('root').find('root-alter'))
@@ -132,7 +132,7 @@ class MmaConversion:
             beat_adjust = ''
             if current_beat != numerator:
                 truncate_side = "Side=Right" if measure_number == "0" and measure_implicit == "yes" else ""
-                current_measure=current_measure[slice(int(current_beat-numerator))]
+                current_measure=current_measure[slice(int(current_beat)-numerator)]
                 mma_text += f"Truncate {current_beat} {truncate_side}\n"
                 if current_beat < 1:
                   current_measure = [latest_chord]

@@ -51,26 +51,11 @@ class MidiConversion:
                               numerator=numerator,
                               denominator=denominator)})
 
-            directions = measure.findall('direction')
-            for direction in directions:
-                sound = direction.find('sound')
-                if sound is not None:
-                    # Midi Tempo
-                    tempo = sound.get('tempo')
-                    if tempo is not None:
-                        midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(int(tempo)))})
-                    # Set Midi Current Velocity
-                    dynamics = sound.get('dynamics')
-                    if dynamics is not None:
-                        velocity = int(round(float(dynamics)))
-                # Midi Marker
-                rehearsal = direction.xpath('direction-type/rehearsal')
-                if rehearsal:
-                    midi_events.append({'tick':tick, 'event':MetaMessage('marker', text=f'{rehearsal[0].text}')})
             staff = 0
-            for element in measure.xpath("note|backup|forward"):
+            for element in measure.xpath("note|backup|forward|direction"):
                 duration = element.find("duration")
-                duration = int(int(duration.text) * multiplier) if duration is not None else 0
+                if duration is not None:
+                    duration = int(int(duration.text) * multiplier) if duration is not None else 0
                 if element.tag == 'note':
                     staff_el = element.find('staff')
                     if staff_el is not None:
@@ -103,6 +88,21 @@ class MidiConversion:
                     tick += duration
                 elif element.tag == 'backup':
                     tick -= duration
+                elif element.tag == 'direction':
+                  sound = element.find('sound')
+                  if sound is not None:
+                      # Midi Tempo
+                      tempo = sound.get('tempo')
+                      if tempo is not None:
+                          midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(int(tempo)))})
+                      # Set Midi Current Velocity
+                      dynamics = sound.get('dynamics')
+                      if dynamics is not None:
+                          velocity = int(round(float(dynamics)))
+                  # Midi Marker
+                  rehearsal = element.xpath('direction-type/rehearsal')
+                  if rehearsal:
+                      midi_events.append({'tick':tick, 'event':MetaMessage('marker', text=f'{rehearsal[0].text}')})
 
         track = MidiTrack()
         previous_tick = 0

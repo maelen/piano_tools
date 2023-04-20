@@ -5,10 +5,14 @@ class MmaConversion:
 
     @classmethod
     def convert_kind(cls, kind):
-      if kind is None or kind == 'major':
+      text_attribute=kind.get('text')
+      element_value=kind.text
+      if text_attribute is None and element_value == 'major':
         kind=''
-      elif kind == 'minor':
-        kind='m'
+      else:
+        kind=text_attribute
+        kind=kind.replace('Maj','maj')
+        kind=kind.replace('min','m')
       return kind
 
     @classmethod
@@ -17,8 +21,12 @@ class MmaConversion:
         alter = int(alter.text)
         if alter == 1:
           alter = '#'
+        elif alter > 1:
+          alter = '#' + alter
         elif alter == -1:
           alter = 'b'
+        elif alter < -1:
+          alter = 'b' + abs(alter)
         else:
           alter = ''
       else:
@@ -30,11 +38,14 @@ class MmaConversion:
       if degree is not None:
         degree_value = int(degree.find('degree-value').text)
         degree_type = degree.find('degree-type').get('text')
+        degree_type_value = degree.find('degree-type').text
         if degree_type is None:
           if degree_value == 7:
             degree_type = ''
           elif degree_value > 7:
             degree_type = 'add'
+          elif degree_type_value == 'alter':
+            degree_type = ''
         degree_alter = cls.convert_alter(degree.find('degree-alter'))
         degree = f'{degree_type}{degree_alter}{degree_value}'
       else:
@@ -75,26 +86,27 @@ class MmaConversion:
 
             directions = measure.findall('direction')
             for direction in directions:
-                sound = direction.find('sound')
-                if sound is not None:
-                    tempo_tmp = sound.get('tempo')
-                    if tempo_tmp is not None:
-                        tempo = int(tempo_tmp)*(denominator/4)
-                        tempo_str = f"Tempo {tempo}\n"
-                        mma_text += tempo_str
+                if tempo is None:
+                  sound = direction.find('sound')
+                  if sound is not None:
+                      tempo_tmp = sound.get('tempo')
+                      if tempo_tmp is not None:
+                          tempo = int(tempo_tmp)*(denominator/4)
+                          tempo_str = f"Tempo {tempo}\n"
+                          mma_text += tempo_str
                 d_type = direction.find('direction-type')
                 if d_type is not None:
                     word = d_type.get('word')
                     if word is not None:
                         mma_text += word.text
+            if tempo is None:
+                tempo = 120 * denominator/4
+                mma_text += f"Tempo {tempo}\n"
+
             measure_text = f"{measure_number} "
             staff = 0
             current_measure=['z']*numerator
             current_beat=0
-            if tempo is None:
-                tempo = 120*(denominator/4)
-                tempo_str = f"Tempo {tempo}\n"
-                mma_text += tempo_str
             for element in measure.xpath("note|harmony|backup|forward"):
                 duration = element.find("duration")
                 duration = int(duration.text) if duration is not None else 0
@@ -113,7 +125,7 @@ class MmaConversion:
                                 tick += duration
                 elif element.tag == 'harmony' and staff == 0 and ((tick-measure_start)%beat_duration) == 0:
                     root_step=element.find('root').find('root-step').text
-                    kind=cls.convert_kind(element.find('kind').get('text'))
+                    kind=cls.convert_kind(element.find('kind'))
                     root_alter=cls.convert_alter(element.find('root').find('root-alter'))
                     degree = cls.convert_degree(element.find('degree'))
                     latest_chord = f'{root_step}{root_alter}{kind}{degree}'
@@ -163,8 +175,14 @@ Seqsize 1
 Time {numerator}
 Timesig {numerator} {denominator}
 
-Chord Define simple_chord 1 1 100 * {numerator}
-Chord Sequence simple_chord
+Begin Chord-Simple
+Voice SteelGuitar
+Volume mp
+Articulate 100
+Unify On
+Define simple_chord 1 1 100 * {numerator}
+Sequence simple_chord
+End
 
 Begin Drum Define
     M1 1 0 90
@@ -175,11 +193,13 @@ End
 Begin Drum-Low
   Sequence  M_Low
   Tone  LowWoodBlock
+  Volume f
 End
 
 Begin Drum-Hi
   Sequence  M_Hi
   Tone HighWoodBlock
+  Volume f
 End
 
 DefGroove custom_metronome_{numerator}_{denominator}

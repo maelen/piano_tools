@@ -25,12 +25,12 @@ Begin Drum-Hi
 End
 
 DefGroove custom_metronome_6_8
-      
+
 
 Groove custom_metronome_6_8
 Timesig 6 8
 Volume ppp
-      
+
 Tempo 240.0
 1 A z z z z z
 2 G z z z z z

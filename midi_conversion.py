@@ -32,6 +32,7 @@ class MidiConversion:
         tick = 0
         velocity = 90
         multiplier = 1
+        tempo = None
         for measure in part[0].xpath("measure"):
             attributes = measure.find('attributes')
             if attributes is not None:
@@ -53,6 +54,9 @@ class MidiConversion:
 
             staff = 0
             for element in measure.xpath("note|backup|forward|direction"):
+                grace = element.find("grace")
+                if grace is not None:
+                  continue
                 duration = element.find("duration")
                 if duration is not None:
                     duration = int(int(duration.text) * multiplier) if duration is not None else 0
@@ -92,9 +96,11 @@ class MidiConversion:
                   sound = element.find('sound')
                   if sound is not None:
                       # Midi Tempo
-                      tempo = sound.get('tempo')
-                      if tempo is not None:
-                          midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(int(tempo)))})
+                      if tempo is None:
+                        tempo_tmp = sound.get('tempo')
+                        if tempo_tmp is not None:
+                            tempo = tempo_tmp
+                            midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(int(tempo)))})
                       # Set Midi Current Velocity
                       dynamics = sound.get('dynamics')
                       if dynamics is not None:

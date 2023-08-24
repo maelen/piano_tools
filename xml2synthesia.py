@@ -26,19 +26,31 @@ finger_convert = {"1":{"1":"6",
 class Synthesia:
     # <Song Version="1" UniqueId="1234" Title="Some Song Title" Rating="75" Bookmarks="1,Intro;15;24,Chorus;36" />
     @classmethod
-    def export_musicxml_to_synthesia(cls, xml_file):
-        tree = etree.parse(xml_file)
-        work = tree.xpath('/score-partwise/work')
-        for element in work:
-          title=element.find('work-title').text
+    def convert(cls, musicxml_file, mscx_file):
+        musicxml_tree = etree.parse(musicxml_file)
+        mscx_tree = etree.parse(mscx_file)
+        metatag_el = mscx_tree.xpath('/museScore/Score')[0].findall('metaTag')
+        metatag = {}
+        for element in metatag_el:
+            metatag[element.get('name')]=element.text
+        title=metatag.get('workTitle')
+        subtitle=metatag.get('subtitle')
+        rating=metatag.get('rating', 1)
+        difficulty=metatag.get('difficulty', 1)
+        composer=metatag.get('composer')
+        arranger=metatag.get('arranger')
+        copy_right=metatag.get('copyright')
+        tags=metatag.get('tags')        
+        group=metatag.get('group')
+        subgroup=metatag.get('subgroup')
 
-        with open(xml_file, "rb") as f:
+        with open(musicxml_file, "rb") as f:
           file_hash = hashlib.md5()
           while chunk := f.read(8192):
               file_hash.update(chunk)
         unique_id=file_hash.hexdigest()
 
-        part = tree.xpath('/score-partwise/part')
+        part = musicxml_tree.xpath('/score-partwise/part')
         tick = 0
         song_fingering = []
         for measure in part[0].xpath("measure"):
@@ -85,11 +97,23 @@ class Synthesia:
               tick -= duration
 
         for i, measure in enumerate(song_fingering):
-          entries_sorted = sorted(measure, key=lambda f: f['tick'])
-          fingering_sorted = [ f['fingering'] for f in entries_sorted ]
-          song_fingering[i] = f' m{i+1}:{"".join(fingering_sorted)}'
+            entries_sorted = sorted(measure, key=lambda f: f['tick'])
+            fingering_sorted = [ f['fingering'] for f in entries_sorted ]
+            song_fingering[i] = f' m{i+1}:{"".join(fingering_sorted)}'
         song_fingering = "".join(song_fingering)
-        song = f'<Song Version="1" UniqueId="{unique_id}" Title="{title}"  FingerHints="{song_fingering}"/>'
+        song = f'<Song Version="1" ' + \
+               f'UniqueId="{unique_id}" ' + \
+               f'Title="{title}" ' + \
+               f'Subtitle="{subtitle}" ' + \
+               f'Rating="{rating}" ' + \
+               f'Difficulty="{difficulty}" ' + \
+               f'Composer="{composer}" ' + \
+               f'Arranger="{arranger}" ' + \
+               f'Copyright="{copy_right}" ' + \
+               f'Tags="{tags}" ' + \
+               f'Group="{group}" ' + \
+               f'Subgroup="{subgroup}" ' + \
+               f'FingerHints="{song_fingering}"/>'
         return song
 
 def process_args():
@@ -109,13 +133,15 @@ def main():
         print("File does not exist: {}".format(args.input))
         sys.exit(-1)
     musicxml_filename=f"{output}.musicxml"
+    mscx_filename=f"{output}.mscx"
     try:
         subprocess.run(["musescore3", args.input, "-o", musicxml_filename])
+        subprocess.run(["musescore3", args.input, "-o", mscx_filename])
     except:
-        print("Partition synthesia file not generated. Is musescore in your search path ?")
+        print("File conversion failed. Is musescore in your search path ?")
         sys.exit(1)
-    synthesia_xml = Synthesia.export_musicxml_to_synthesia(musicxml_filename)
-    synthesia_file = open(f"{output}.synthesia", "w")
+    synthesia_xml = Synthesia.convert(musicxml_filename, mscx_filename)
+    synthesia_file = open(f"{output}._synthesia", "w")
     n = synthesia_file.write(synthesia_xml)
     synthesia_file.close()
 

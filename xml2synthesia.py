@@ -53,8 +53,12 @@ class Synthesia:
         part = musicxml_tree.xpath('/score-partwise/part')
         tick = 0
         song_fingering = []
+        bookmarks = ''
         for measure in part[0].xpath("measure"):
           measure_number=f"{measure.attrib['number']}"
+          rehearsal=measure.find('.//rehearsal')
+          if rehearsal is not None:
+              bookmarks += f'{measure_number},{rehearsal.text};'
           song_fingering.append([])
           for element in measure.xpath("note|backup|forward"):
             grace = element.find("grace")
@@ -111,6 +115,7 @@ class Synthesia:
                f'Arranger="{arranger}" ' + \
                f'Copyright="{copy_right}" ' + \
                f'Tags="{tags}" ' + \
+               f'Bookmarks="{bookmarks}" ' + \
                f'Group="{group}" ' + \
                f'Subgroup="{subgroup}" ' + \
                f'FingerHints="{song_fingering}"/>'

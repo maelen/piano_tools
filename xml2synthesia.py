@@ -2,15 +2,11 @@
 
 import logging
 import argparse
-import tempfile
 import os
 import sys
 import subprocess
 import hashlib
-import base64
 from lxml import etree
-from dicttoxml import dicttoxml
-from xml.dom.minidom import parseString
 
 finger_convert = {"1":{"1":"6",
                        "2":"7",
@@ -24,9 +20,8 @@ finger_convert = {"1":{"1":"6",
                        "5":"5"}}
 
 class Synthesia:
-    # <Song Version="1" UniqueId="1234" Title="Some Song Title" Rating="75" Bookmarks="1,Intro;15;24,Chorus;36" />
     @classmethod
-    def convert(cls, musicxml_file, mscx_file):
+    def extract(cls, musicxml_file, mscx_file):
         musicxml_tree = etree.parse(musicxml_file)
         mscx_tree = etree.parse(mscx_file)
         metatag_el = mscx_tree.xpath('/museScore/Score')[0].findall('metaTag')
@@ -88,7 +83,7 @@ class Synthesia:
                   if tie_stop is None:
                     if staff in ["1","2"]:
                       if fingering_el is not None:
-                        fingering = finger_convert[staff][fingering_el.text]
+                        fingering = finger_convert[staff].get(fingering_el.text,'-')
                       else:
                         fingering = "-"
                       song_fingering[-1].append({'tick':event_start, 'fingering':fingering})
@@ -115,16 +110,32 @@ class Synthesia:
                f'Arranger="{arranger}" ' + \
                f'Copyright="{copy_right}" ' + \
                f'Tags="{tags}" ' + \
-               f'Bookmarks="{bookmarks}" ' + \
+               f'Bookmarks="{bookmarks[:-1]}" ' + \
                f'Group="{group}" ' + \
                f'Subgroup="{subgroup}" ' + \
                f'FingerHints="{song_fingering}"/>'
         return song
 
+    @classmethod
+    def process(cls, input_file):
+        output = input_file.rsplit('.', 1)[0]
+        musicxml_filename=f"{output}.musicxml"
+        mscx_filename=f"{output}.mscx"
+        try:
+            subprocess.run(["musescore3", input_file, "-o", musicxml_filename])
+            subprocess.run(["musescore3", input_file, "-o", mscx_filename])
+        except:
+            print("File conversion failed. Is musescore in your search path ?")
+            sys.exit(1)
+        song_xml = Synthesia.extract(musicxml_filename, mscx_filename)
+        os.remove(f"{mscx_filename}")
+
+        return song_xml
+
+
 def process_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("input", help="musicxml or musescore input file")
-    parser.add_argument("output", nargs='?', help="optional output file if not using default")
+    parser.add_argument("-f", "--folder", default=".", help="musescore input file")
     parser.add_argument("-d", "--debug", default="WARN", help="Select log level used for debugging")
     args = parser.parse_args()
     return args
@@ -132,28 +143,25 @@ def process_args():
 def main():
     args = process_args()
     logging.basicConfig(level=logging._nameToLevel[args.debug])
-    output = args.output if args.output is not None else args.input.rsplit('.', 1)[0]
 
-    if not os.path.isfile(args.input):
-        print("File does not exist: {}".format(args.input))
-        sys.exit(-1)
-    musicxml_filename=f"{output}.musicxml"
-    mscx_filename=f"{output}.mscx"
-    try:
-        subprocess.run(["musescore3", args.input, "-o", musicxml_filename])
-        subprocess.run(["musescore3", args.input, "-o", mscx_filename])
-    except:
-        print("File conversion failed. Is musescore in your search path ?")
-        sys.exit(1)
-    synthesia_xml = Synthesia.convert(musicxml_filename, mscx_filename)
-    synthesia_file = open(f"{output}._synthesia", "w")
-    n = synthesia_file.write(synthesia_xml)
-    synthesia_file.close()
+    songs = []
+    for file in os.listdir(args.folder):
+        if file.endswith('.mscz'):
+            print(file)
+            song_xml=Synthesia.process(file)
+            songs.append(song_xml)
+    songs="<Songs>\n    "+"\n    ".join(songs)+"\n  </Songs>"
+    groups=""
 
-    print(f"{output}.synthesia has been created\n")
-#    os.remove(f"{output}_acc.mid")
-#    os.remove(f"{output}_mel.mid")
+    metadata_text = \
+f"""
+<?xml version="1.0" encoding="UTF-8" ?>
+<SynthesiaMetadata Version="1">
+  {songs}{groups}
+</SynthesiaMetadata>"""   
 
+    with open(f"{args.folder}/metadata.synthesia", "w") as synthesia_file:        
+        synthesia_file.write(metadata_text)
 
 if __name__ == "__main__":
     main()

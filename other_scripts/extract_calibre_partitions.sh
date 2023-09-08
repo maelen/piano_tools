@@ -3,7 +3,7 @@
 input_folder=$1
 output_folder=${input_folder}_output
 
-book_id=$(calibredb search --library-path piano "series:partition")
+book_id=$(calibredb search --library-path piano "series:partitions")
 
 rm -Rf $output_folder
 calibredb export --formats mscz --template "{series_index:0>2s} - {title}" \

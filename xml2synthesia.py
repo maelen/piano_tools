@@ -57,7 +57,7 @@ class Synthesia:
         part = musicxml_tree.xpath('/score-partwise/part')
 
         tick = 0
-        musicxml = {'song_fingering': [], 'bookmarks': '', 'hand_part': []}
+        musicxml = {'song_fingering': [], 'bookmarks': [], 'hand_part': []}
         i=0
         measures=part[0].xpath("measure")
         repeat_start = 0
@@ -65,10 +65,11 @@ class Synthesia:
         repeat_times = 0
         while i < len(measures):
           measure = measures[i]
-          measure_number=f"{measure.attrib['number']}"
           rehearsal=measure.find('.//rehearsal')
           if rehearsal is not None:
-              musicxml['bookmarks'] += f'{measure_number},{rehearsal.text};'
+              musicxml['bookmarks'].append(rehearsal.text)
+          else:
+              musicxml['bookmarks'].append(None)
           musicxml['song_fingering'].append([])
           musicxml['hand_part'].append([])
           for element in measure.xpath("note|backup|forward|barline"):
@@ -136,7 +137,11 @@ class Synthesia:
             repeat_direction = 'forward'
           elif repeat_direction == 'forward':
             i += 1
-
+        bookmarks = ''
+        for i, bookmark in enumerate(musicxml['bookmarks']):
+            if bookmark is not None:
+              bookmarks += f'{i+1},{bookmark};'
+        musicxml['bookmarks'] = bookmarks[:-1]
         for i, measure in enumerate(musicxml['song_fingering']):
             entries_sorted = sorted(measure, key=lambda f: f['tick'])
             fingering_sorted = [ f['fingering'] for f in entries_sorted ]
@@ -178,10 +183,10 @@ class Synthesia:
                'Copyright="' + str(metadata['copy_right']) + '" ' + \
                'Tags="' + str(metadata['tags']) + '" ' + \
                'Parts="' + str(musicxml['hand_part']) + '" ' + \
-               'Bookmarks="' + str(musicxml['bookmarks'][:-1]) + '" ' + \
                'Group="' + str(metadata['group']) + '" ' + \
                'Subgroup="' + str(metadata['subgroup']) + '" ' + \
-               'FingerHints="' + str(musicxml['song_fingering']) + '"/>'
+               'FingerHints="' + str(musicxml['song_fingering']) + '" ' + \
+               'Bookmarks="' + musicxml['bookmarks'] + '" ' + '/>'
         os.remove(f"{mscx_filename}")
         os.remove(f"{musicxml_filename}")
 

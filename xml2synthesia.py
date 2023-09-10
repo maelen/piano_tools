@@ -54,19 +54,24 @@ class Synthesia:
     def process_musicxml(cls, musicxml_filename):
         musicxml = {}
         musicxml_tree = etree.parse(musicxml_filename)
-
         part = musicxml_tree.xpath('/score-partwise/part')
+
         tick = 0
-        musicxml = {'song_fingering': [], 'bookmarks': ''}
-        #song_fingering = []
-        #bookmarks = ''
-        for measure in part[0].xpath("measure"):
+        musicxml = {'song_fingering': [], 'bookmarks': '', 'hand_part': []}
+        i=0
+        measures=part[0].xpath("measure")
+        repeat_start = 0
+        repeat_direction =  'forward'
+        repeat_times = 0
+        while i < len(measures):
+          measure = measures[i]
           measure_number=f"{measure.attrib['number']}"
           rehearsal=measure.find('.//rehearsal')
           if rehearsal is not None:
               musicxml['bookmarks'] += f'{measure_number},{rehearsal.text};'
           musicxml['song_fingering'].append([])
-          for element in measure.xpath("note|backup|forward"):
+          musicxml['hand_part'].append([])
+          for element in measure.xpath("note|backup|forward|barline"):
             grace = element.find("grace")
             if grace is not None:
               continue
@@ -98,7 +103,9 @@ class Synthesia:
                         fingering = 's'.join([finger_convert[staff].get(finger,'-') for finger in fingering])
                       else:
                         fingering = "-"
+                      hand = "R" if staff == "1" else "L"
                       musicxml['song_fingering'][-1].append({'tick':event_start, 'fingering':fingering})
+                      musicxml['hand_part'][-1].append({'tick':event_start, 'hand':hand})
                       #print(f'S:{staff}T:{event_start}:{step}:{fingering} ')
                   if chord is None:
                     tick += duration
@@ -106,14 +113,41 @@ class Synthesia:
               tick += duration
             elif element.tag == 'backup':
               tick -= duration
+            elif element.tag == 'barline':
+              ending = element.find('ending')
+              if ending is not None:
+                ending_number = ending.find('number')
+                ending_type = ending.find('type')
+              repeat = element.find('repeat')
+              if repeat is not None:
+                  repeat_direction = repeat.attrib['direction']
+                  if repeat_direction == 'forward':
+                    repeat_start = i
+                  elif repeat_direction == 'backward':
+                    repeat_times_el = repeat.attrib.get('times', '1')
+                    if repeat_times < int(repeat_times_el):
+                      repeat_times += 1
+                    else:
+                      repeat_start = 0
+                      repeat_direction = 'forward'
+                    
+          if repeat_direction == 'backward':
+            i = repeat_start
+            repeat_direction = 'forward'
+          elif repeat_direction == 'forward':
+            i += 1
 
         for i, measure in enumerate(musicxml['song_fingering']):
             entries_sorted = sorted(measure, key=lambda f: f['tick'])
             fingering_sorted = [ f['fingering'] for f in entries_sorted ]
-            musicxml['song_fingering'][i] = f' m{i+1}:{"".join(fingering_sorted)}'
+            musicxml['song_fingering'][i] = f' m{i+1}: {"".join(fingering_sorted)}'
         musicxml['song_fingering'] = "".join(musicxml['song_fingering'])
+        for i, measure in enumerate(musicxml['hand_part']):
+            entries_sorted = sorted(measure, key=lambda f: f['tick'])
+            hand_part_sorted = [ f['hand'] for f in entries_sorted ]
+            musicxml['hand_part'][i] = f' m{i+1}: {"".join(hand_part_sorted)}'
+        musicxml['hand_part'] = "".join(musicxml['hand_part'])
         return musicxml
-
 
     @classmethod
     def process(cls, input_file):
@@ -143,6 +177,7 @@ class Synthesia:
                'Arranger="' + str(metadata['arranger']) + '" ' + \
                'Copyright="' + str(metadata['copy_right']) + '" ' + \
                'Tags="' + str(metadata['tags']) + '" ' + \
+               'Parts="' + str(musicxml['hand_part']) + '" ' + \
                'Bookmarks="' + str(musicxml['bookmarks'][:-1]) + '" ' + \
                'Group="' + str(metadata['group']) + '" ' + \
                'Subgroup="' + str(metadata['subgroup']) + '" ' + \

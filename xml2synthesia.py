@@ -57,22 +57,22 @@ class Synthesia:
         part = musicxml_tree.xpath('/score-partwise/part')
 
         tick = 0
-        musicxml = {'song_fingering': [], 'bookmarks': [], 'hand_part': []}
+        musicxml = {'song_fingering': [], 'bookmarks': []}
         i=0
         measures=part[0].xpath("measure")
         repeat_start = 0
         repeat_direction =  'forward'
         repeat_times = 0
+        ending_number = 0
+        ending_type = None
         while i < len(measures):
           measure = measures[i]
           rehearsal=measure.find('.//rehearsal')
-          if rehearsal is not None:
-              musicxml['bookmarks'].append(rehearsal.text)
-          else:
-              musicxml['bookmarks'].append(None)
+          musicxml['bookmarks'].append("")
           musicxml['song_fingering'].append([])
-          musicxml['hand_part'].append([])
-          for element in measure.xpath("note|backup|forward|barline"):
+          for element in measure.xpath("note|backup|forward|barline|direction"):
+            if ending_number > 0 and ending_number <= repeat_times and element.tag != 'barline':
+              continue
             grace = element.find("grace")
             if grace is not None:
               continue
@@ -104,9 +104,7 @@ class Synthesia:
                         fingering = 's'.join([finger_convert[staff].get(finger,'-') for finger in fingering])
                       else:
                         fingering = "-"
-                      hand = "R" if staff == "1" else "L"
                       musicxml['song_fingering'][-1].append({'tick':event_start, 'fingering':fingering})
-                      musicxml['hand_part'][-1].append({'tick':event_start, 'hand':hand})
                       #print(f'S:{staff}T:{event_start}:{step}:{fingering} ')
                   if chord is None:
                     tick += duration
@@ -117,8 +115,8 @@ class Synthesia:
             elif element.tag == 'barline':
               ending = element.find('ending')
               if ending is not None:
-                ending_number = ending.find('number')
-                ending_type = ending.find('type')
+                ending_number = int(ending.attrib.get('number'))
+                ending_type = ending.attrib.get('type')
               repeat = element.find('repeat')
               if repeat is not None:
                   repeat_direction = repeat.attrib['direction']
@@ -131,15 +129,26 @@ class Synthesia:
                     else:
                       repeat_start = 0
                       repeat_direction = 'forward'
+            elif element.tag == 'direction':
+              rehearsal=element.find('.//rehearsal')
+              if rehearsal is not None:
+                  musicxml['bookmarks'][-1] += rehearsal.text   
                     
           if repeat_direction == 'backward':
             i = repeat_start
             repeat_direction = 'forward'
           elif repeat_direction == 'forward':
-            i += 1
+            i += 1           
+          if ending_number > 0 and not musicxml['song_fingering'][-1]:
+            musicxml['song_fingering'] = musicxml['song_fingering'][:-1]
+            musicxml['bookmarks'] = musicxml['bookmarks'][:-1]
+          if ending_type in ["stop","discontinue"]:
+            ending_number = 0
+            ending_type = None
+
         bookmarks = ''
         for i, bookmark in enumerate(musicxml['bookmarks']):
-            if bookmark is not None:
+            if bookmark:
               bookmarks += f'{i+1},{bookmark};'
         musicxml['bookmarks'] = bookmarks[:-1]
         for i, measure in enumerate(musicxml['song_fingering']):
@@ -147,11 +156,6 @@ class Synthesia:
             fingering_sorted = [ f['fingering'] for f in entries_sorted ]
             musicxml['song_fingering'][i] = f' m{i+1}: {"".join(fingering_sorted)}'
         musicxml['song_fingering'] = "".join(musicxml['song_fingering'])
-        for i, measure in enumerate(musicxml['hand_part']):
-            entries_sorted = sorted(measure, key=lambda f: f['tick'])
-            hand_part_sorted = [ f['hand'] for f in entries_sorted ]
-            musicxml['hand_part'][i] = f' m{i+1}: {"".join(hand_part_sorted)}'
-        musicxml['hand_part'] = "".join(musicxml['hand_part'])
         return musicxml
 
     @classmethod
@@ -182,7 +186,6 @@ class Synthesia:
                'Arranger="' + str(metadata['arranger']) + '" ' + \
                'Copyright="' + str(metadata['copy_right']) + '" ' + \
                'Tags="' + str(metadata['tags']) + '" ' + \
-               'Parts="' + str(musicxml['hand_part']) + '" ' + \
                'Group="' + str(metadata['group']) + '" ' + \
                'Subgroup="' + str(metadata['subgroup']) + '" ' + \
                'FingerHints="' + str(musicxml['song_fingering']) + '" ' + \

@@ -99,7 +99,7 @@ class Synthesia:
                     event_start = tick
                   if tie_stop is None:
                     if staff in ["1","2"]:
-                      if fingering_el is not None:
+                      if fingering_el is not None and fingering_el.text:
                         fingering=fingering_el.text.split('-')
                         fingering = 's'.join([finger_convert[staff].get(finger,'-') for finger in fingering])
                       else:

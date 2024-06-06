@@ -29,7 +29,7 @@ class Synthesia:
                 file_hash.update(chunk)
         unique_id=file_hash.hexdigest()
         return unique_id
-    
+
     @classmethod
     def process_metadata(cls, mscx_filename):
         mscx_tree = etree.parse(mscx_filename)
@@ -45,7 +45,7 @@ class Synthesia:
         metadata['composer']=metatag.get('composer')
         metadata['arranger']=metatag.get('arranger')
         metadata['copy_right']=metatag.get('copyright')
-        metadata['tags']=metatag.get('tags')        
+        metadata['tags']=metatag.get('tags')
         metadata['group']=metatag.get('group')
         metadata['subgroup']=metatag.get('subgroup')
         return metadata
@@ -57,7 +57,7 @@ class Synthesia:
         part = musicxml_tree.xpath('/score-partwise/part')
 
         tick = 0
-        musicxml = {'song_fingering': [], 'bookmarks': []}
+        musicxml = {'song_fingering': [], 'bookmarks': [], 'hand_part': []}
         i=0
         measures=part[0].xpath("measure")
         repeat_start = 0
@@ -70,6 +70,7 @@ class Synthesia:
           rehearsal=measure.find('.//rehearsal')
           musicxml['bookmarks'].append("")
           musicxml['song_fingering'].append([])
+          musicxml['hand_part'].append([])
           for element in measure.xpath("note|backup|forward|barline|direction"):
             if ending_number > 0 and ending_number <= repeat_times and element.tag != 'barline':
               continue
@@ -104,7 +105,9 @@ class Synthesia:
                         fingering = 's'.join([finger_convert[staff].get(finger,'-') for finger in fingering])
                       else:
                         fingering = "-"
+                      hand = "R" if staff == "1" else "L"
                       musicxml['song_fingering'][-1].append({'tick':event_start, 'fingering':fingering})
+                      musicxml['hand_part'][-1].append({'tick':event_start, 'hand':hand})
                       #print(f'S:{staff}T:{event_start}:{step}:{fingering} ')
                   if chord is None:
                     tick += duration
@@ -132,13 +135,13 @@ class Synthesia:
             elif element.tag == 'direction':
               rehearsal=element.find('.//rehearsal')
               if rehearsal is not None:
-                  musicxml['bookmarks'][-1] += rehearsal.text   
-                    
+                  musicxml['bookmarks'][-1] += rehearsal.text
+
           if repeat_direction == 'backward':
             i = repeat_start
             repeat_direction = 'forward'
           elif repeat_direction == 'forward':
-            i += 1           
+            i += 1
           if ending_number > 0 and not musicxml['song_fingering'][-1]:
             musicxml['song_fingering'] = musicxml['song_fingering'][:-1]
             musicxml['bookmarks'] = musicxml['bookmarks'][:-1]
@@ -156,6 +159,12 @@ class Synthesia:
             fingering_sorted = [ f['fingering'] for f in entries_sorted ]
             musicxml['song_fingering'][i] = f' m{i+1}: {"".join(fingering_sorted)}'
         musicxml['song_fingering'] = "".join(musicxml['song_fingering'])
+
+        for i, measure in enumerate(musicxml['hand_part']):
+            entries_sorted = sorted(measure, key=lambda f: f['tick'])
+            hand_part_sorted = [ f['hand'] for f in entries_sorted ]
+            musicxml['hand_part'][i] = f' m{i+1}: {"".join(hand_part_sorted)}'
+        musicxml['hand_part'] = "".join(musicxml['hand_part'])
         return musicxml
 
     @classmethod
@@ -171,11 +180,11 @@ class Synthesia:
         except:
             print("File conversion failed. Is musescore in your search path ?")
             sys.exit(1)
-                    
-        unique_id = Synthesia.process_unique_id(mxl_filename)     
+
+        unique_id = Synthesia.process_unique_id(mxl_filename)
         metadata = Synthesia.process_metadata(mscx_filename)
-        musicxml = Synthesia.process_musicxml(musicxml_filename)       
-        
+        musicxml = Synthesia.process_musicxml(musicxml_filename)
+
         song_xml = '<Song Version="1" ' + \
                'UniqueId="' + unique_id + '" ' + \
                'Title="' + str(metadata['title']) + '" ' + \
@@ -186,6 +195,7 @@ class Synthesia:
                'Arranger="' + str(metadata['arranger']) + '" ' + \
                'Copyright="' + str(metadata['copy_right']) + '" ' + \
                'Tags="' + str(metadata['tags']) + '" ' + \
+               'Parts="' + str(musicxml['hand_part']) + '" ' + \
                'Group="' + str(metadata['group']) + '" ' + \
                'Subgroup="' + str(metadata['subgroup']) + '" ' + \
                'FingerHints="' + str(musicxml['song_fingering']) + '" ' + \
@@ -221,9 +231,9 @@ f"""
 <?xml version="1.0" encoding="UTF-8" ?>
 <SynthesiaMetadata Version="1">
   {songs}{groups}
-</SynthesiaMetadata>"""   
+</SynthesiaMetadata>"""
 
-    with open(f"{args.folder}/metadata.synthesia", "w") as synthesia_file:        
+    with open(f"{args.folder}/metadata.synthesia", "w") as synthesia_file:
         synthesia_file.write(metadata_text)
 
 if __name__ == "__main__":

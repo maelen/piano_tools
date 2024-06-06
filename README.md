@@ -71,9 +71,7 @@
 I started this project because I wanted to easily add piano lessons to my Casio piano.
 
 The main script is called xml2casiomidi.py. This can be used with the step up lessons mode.
-You`ll need to transfer the files or load them on an sd card
-
-It also works with Pianobooster (Left and Right hand parts only), Chordana, Casio Music Space, Synthesia
+You`ll need to transfer the files or load them on an sd card. It also works with Pianobooster (Left and Right hand parts only), Chordana, Casio Music Space
 
 Using a musicxml or Musescore file, xml2casiomidi converts the file to a midi file.
 
@@ -82,18 +80,33 @@ It can:
 - split the score into smaller parts
 - generate a backtrack with a metronome and the chord symbols
 
+There is now also xml2synthesia.py. It will create Synthesia lessons using a musicxml file or musescore3 file.
+
+There is only one argument required which is the folder where music files can be found. Musescore must be in your search path.
+
+It can:
+- separate the left and right hand parts
+- Use the metadata to configure the title, subtitle, rank and difficulty
+- Set bookmarks
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- GETTING STARTED -->
 ## Getting Started
 
-xml2casiomidi.py is used from the command line.
+xml2casiomidi.py:
+It is used from the command line.
 
 In its simplest form, all you need to do is type ./xml2casiomidi.py <musicxml or Musescore file>. This will generate a midi file in the same folder than the musicxml or musescore file.
 
 The full list of arguments can be obtained by typing ./xml2casiomidi.py -h
 
 There is also a .mma file that is generated. The file can be used to generate a more interesting backtrack.
+
+xml2synthesia.py:
+It is used from the command line.
+
+Type ./xml2synthesia.py <Folder that contains musicxml or musescore 3 files>
 
 ### Prerequisites
 

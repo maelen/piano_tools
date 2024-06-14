@@ -5,8 +5,6 @@ from lxml import etree
 import multitimer
 
 
-
-
 class MidiConversion:
 
     notes_base_value = {'C':12, 'D':14, 'E':16, 'F':17, 'G':19, 'A':21, 'B':23}
@@ -22,11 +20,11 @@ class MidiConversion:
         return octave * 12 + cls.notes_base_value[step] + alter
 
     @classmethod
-    def midi_conversion(cls, xml_file, num_ticks=192, lesson_channel=3):
+    def midi_conversion(cls, musicxml_filename, num_ticks=192, lesson_channel=3):
         lh_channel=lesson_channel-1
         rh_channel=lh_channel+1
         midi_events = [{'divisions':num_ticks}]
-        tree = etree.parse(xml_file)
+        tree = etree.parse(musicxml_filename)
         part = tree.xpath('/score-partwise/part')
         event_start = 0
         tick = 0
@@ -110,16 +108,29 @@ class MidiConversion:
                   if rehearsal:
                       midi_events.append({'tick':tick, 'event':MetaMessage('marker', text=f'{rehearsal[0].text}')})
 
-        track = MidiTrack()
-        previous_tick = 0
+        tracks = [MidiTrack(),MidiTrack(),MidiTrack()]
+        previous_ticks = [0,0,0]
         midi_events = midi_events[1:]
         for entry in sorted(midi_events, key=lambda i: i['tick']) :
-            updated_event = entry['event'].copy(time=entry['tick'] - previous_tick)
-            track.append(updated_event)
+            if entry['event'].is_meta == True:
+                track_id = 0 
+            elif entry['event'].channel == lh_channel:
+                track_id = 1
+            elif entry['event'].channel == rh_channel:
+                track_id = 2
+            updated_event = entry['event'].copy(time=entry['tick'] - previous_ticks[track_id])
+            tracks[track_id].append(updated_event)
+            previous_ticks[track_id] = entry['tick']        
             logging.info('E {}:{}'.format(entry['tick'], updated_event))
-            previous_tick = entry['tick']
 
-        return track
+        return tracks
+
+    @classmethod    
+    def write_midi(cls, tracks, midi_file, num_ticks=192):
+        midi_attributes = {'divisions':num_ticks}
+        mid = MidiFile(type=1, ticks_per_beat=midi_attributes['divisions'])
+        mid.tracks.extend(tracks)
+        mid.save(midi_file)
 
 
 class MidiComparator:

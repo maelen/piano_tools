@@ -7,6 +7,7 @@ import sys
 import subprocess
 import hashlib
 from lxml import etree
+from midi_conversion import MidiConversion
 
 finger_convert = {"1":{"1":"6",
                        "2":"7",
@@ -52,12 +53,11 @@ class Synthesia:
 
     @classmethod
     def process_musicxml(cls, musicxml_filename):
-        musicxml = {}
         musicxml_tree = etree.parse(musicxml_filename)
         part = musicxml_tree.xpath('/score-partwise/part')
 
         tick = 0
-        musicxml = {'song_fingering': [], 'bookmarks': [], 'hand_part': []}
+        musicxml = {'song_fingering': [[],[]], 'bookmarks': [], 'hand_part': []}
         i=0
         measures=part[0].xpath("measure")
         repeat_start = 0
@@ -69,7 +69,8 @@ class Synthesia:
           measure = measures[i]
           rehearsal=measure.find('.//rehearsal')
           musicxml['bookmarks'].append("")
-          musicxml['song_fingering'].append([])
+          musicxml['song_fingering'][0].append([])
+          musicxml['song_fingering'][1].append([])
           musicxml['hand_part'].append([])
           for element in measure.xpath("note|backup|forward|barline|direction"):
             if ending_number > 0 and ending_number <= repeat_times and element.tag != 'barline':
@@ -106,7 +107,7 @@ class Synthesia:
                       else:
                         fingering = "-"
                       hand = "R" if staff == "1" else "L"
-                      musicxml['song_fingering'][-1].append({'tick':event_start, 'fingering':fingering})
+                      musicxml['song_fingering'][int(staff)-1][-1].append({'tick':event_start, 'fingering':fingering})
                       musicxml['hand_part'][-1].append({'tick':event_start, 'hand':hand})
                       #print(f'S:{staff}T:{event_start}:{step}:{fingering} ')
                   if chord is None:
@@ -142,8 +143,9 @@ class Synthesia:
             repeat_direction = 'forward'
           elif repeat_direction == 'forward':
             i += 1
-          if ending_number > 0 and not musicxml['song_fingering'][-1]:
-            musicxml['song_fingering'] = musicxml['song_fingering'][:-1]
+          if ending_number > 0 and not musicxml['song_fingering'][0][-1]:
+            musicxml['song_fingering'][0] = musicxml['song_fingering'][0][:-1]
+            musicxml['song_fingering'][1] = musicxml['song_fingering'][1][:-1]
             musicxml['bookmarks'] = musicxml['bookmarks'][:-1]
           if ending_type in ["stop","discontinue"]:
             ending_number = 0
@@ -154,17 +156,14 @@ class Synthesia:
             if bookmark:
               bookmarks += f'{i+1},{bookmark};'
         musicxml['bookmarks'] = bookmarks[:-1]
-        for i, measure in enumerate(musicxml['song_fingering']):
-            entries_sorted = sorted(measure, key=lambda f: f['tick'])
-            fingering_sorted = [ f['fingering'] for f in entries_sorted ]
-            musicxml['song_fingering'][i] = f' m{i+1}: {"".join(fingering_sorted)}'
-        musicxml['song_fingering'] = "".join(musicxml['song_fingering'])
-
-        for i, measure in enumerate(musicxml['hand_part']):
-            entries_sorted = sorted(measure, key=lambda f: f['tick'])
-            hand_part_sorted = [ f['hand'] for f in entries_sorted ]
-            musicxml['hand_part'][i] = f' m{i+1}: {"".join(hand_part_sorted)}'
-        musicxml['hand_part'] = "".join(musicxml['hand_part'])
+        for hand in range(2): # Left hand and right hand
+          for i, measure in enumerate(musicxml['song_fingering'][hand]):
+              entries_sorted = sorted(measure, key=lambda f: f['tick'])
+              fingering_sorted = [ f['fingering'] for f in entries_sorted ]
+              musicxml['song_fingering'][hand][i] = f' {"".join(fingering_sorted)}'
+          musicxml['song_fingering'][hand] = "".join(musicxml['song_fingering'][hand])
+        musicxml['song_fingering']  = "t1: " + musicxml['song_fingering'][1] + " t2: " + musicxml['song_fingering'][0]
+        musicxml['hand_part'] = "t1: LA t2: RA"
         return musicxml
 
     @classmethod
@@ -172,18 +171,19 @@ class Synthesia:
         output = input_file.rsplit('.', 1)[0]
         musicxml_filename=f"{output}.musicxml"
         mscx_filename=f"{output}.mscx"
-        mxl_filename=f"{output}.mxl"
+        midi_filename=f"{output}.mid"
         try:
             subprocess.run(["musescore3", input_file, "-o", musicxml_filename])
             subprocess.run(["musescore3", input_file, "-o", mscx_filename])
-            subprocess.run(["musescore3", input_file, "-o", mxl_filename])
         except:
             print("File conversion failed. Is musescore in your search path ?")
             sys.exit(1)
 
-        unique_id = Synthesia.process_unique_id(mxl_filename)
+        midi_tracks = MidiConversion.midi_conversion(musicxml_filename)
+        MidiConversion.write_midi(midi_tracks, midi_filename)        
+        unique_id = Synthesia.process_unique_id(midi_filename)
         metadata = Synthesia.process_metadata(mscx_filename)
-        musicxml = Synthesia.process_musicxml(musicxml_filename)
+        xmldata = Synthesia.process_musicxml(musicxml_filename)
 
         song_xml = '<Song Version="1" ' + \
                'UniqueId="' + unique_id + '" ' + \
@@ -195,11 +195,11 @@ class Synthesia:
                'Arranger="' + str(metadata['arranger']) + '" ' + \
                'Copyright="' + str(metadata['copy_right']) + '" ' + \
                'Tags="' + str(metadata['tags']) + '" ' + \
-               'Parts="' + str(musicxml['hand_part']) + '" ' + \
+               'Parts="' + str(xmldata['hand_part']) + '" ' + \
                'Group="' + str(metadata['group']) + '" ' + \
                'Subgroup="' + str(metadata['subgroup']) + '" ' + \
-               'FingerHints="' + str(musicxml['song_fingering']) + '" ' + \
-               'Bookmarks="' + musicxml['bookmarks'] + '" ' + '/>'
+               'FingerHints="' + str(xmldata['song_fingering']) + '" ' + \
+               'Bookmarks="' + xmldata['bookmarks'] + '" ' + '/>'
         os.remove(f"{mscx_filename}")
         os.remove(f"{musicxml_filename}")
 

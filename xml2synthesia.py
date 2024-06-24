@@ -66,102 +66,106 @@ class Synthesia:
         ending_number = 0
         ending_type = None
         while i < len(measures):
-          measure = measures[i]
-          rehearsal=measure.find('.//rehearsal')
-          musicxml['bookmarks'].append("")
-          musicxml['song_fingering'][0].append([])
-          musicxml['song_fingering'][1].append([])
-          musicxml['hand_part'].append([])
-          for element in measure.xpath("note|backup|forward|barline|direction"):
-            if ending_number > 0 and ending_number <= repeat_times and element.tag != 'barline':
-              continue
-            grace = element.find("grace")
-            if grace is not None:
-              continue
-            duration = element.find("duration")
-            if duration is not None:
-              duration = int(int(duration.text)) if duration is not None else 0
-            if element.tag == 'note':
-              staff = element.find('staff').text
-              fingering_el = element.find('notations/technical/fingering')
-              rest = element.find('rest')
-              pitch = element.find('pitch')
-              tie_start = element.find('tie[@type="start"]')
-              tie_stop = element.find('tie[@type="stop"]')
-              if rest is not None:
-                  tick += duration
-              else:
-                if pitch is not None:
-                  step = pitch.find('step')
-                  step = step.text if step is not None else ''
-                  alter = pitch.find('alter')
-                  alter = int(alter.text) if alter is not None else 0
-                  chord = element.find('chord')
-                  if chord is None:
-                    event_start = tick
-                  if tie_stop is None:
-                    if staff in ["1","2"]:
-                      if fingering_el is not None and fingering_el.text:
-                        fingering=fingering_el.text.split('-')
-                        fingering = 's'.join([finger_convert[staff].get(finger,'-') for finger in fingering])
-                      else:
-                        fingering = "-"
-                      hand = "R" if staff == "1" else "L"
-                      musicxml['song_fingering'][int(staff)-1][-1].append({'tick':event_start, 'fingering':fingering})
-                      musicxml['hand_part'][-1].append({'tick':event_start, 'hand':hand})
-                      #print(f'S:{staff}T:{event_start}:{step}:{fingering} ')
-                  if chord is None:
-                    tick += duration
-            elif element.tag == 'forward':
-              tick += duration
-            elif element.tag == 'backup':
-              tick -= duration
-            elif element.tag == 'barline':
-              ending = element.find('ending')
-              if ending is not None:
-                ending_number = int(ending.attrib.get('number'))
-                ending_type = ending.attrib.get('type')
-              repeat = element.find('repeat')
-              if repeat is not None:
-                  repeat_direction = repeat.attrib['direction']
-                  if repeat_direction == 'forward':
-                    repeat_start = i
-                  elif repeat_direction == 'backward':
-                    repeat_times_el = repeat.attrib.get('times', '1')
-                    if repeat_times < int(repeat_times_el):
-                      repeat_times += 1
+            measure = measures[i]
+            rehearsal=measure.find('.//rehearsal')
+            musicxml['bookmarks'].append("")
+            musicxml['song_fingering'][0].append([])
+            musicxml['song_fingering'][1].append([])
+            musicxml['hand_part'].append([])
+            elements = measure.xpath("note|backup|forward|barline|direction")
+            j=0
+            while j < len(elements): # element in measure.xpath("note|backup|forward|barline|direction"):
+                element = elements[j]
+                j += 1
+                if ending_number > 0 and ending_number <= repeat_times and element.tag != 'barline':
+                    continue
+                grace = element.find("grace")
+                if grace is not None:
+                    continue
+                duration = element.find("duration")
+                if duration is not None:
+                    duration = int(int(duration.text)) if duration is not None else 0
+                if element.tag == 'note':
+                    staff = element.find('staff').text
+                    fingering_el = element.find('notations/technical/fingering')
+                    rest = element.find('rest')
+                    pitch = element.find('pitch')
+                    tie_start = element.find('tie[@type="start"]')
+                    tie_stop = element.find('tie[@type="stop"]')
+                    if rest is not None:
+                        tick += duration
                     else:
-                      repeat_start = 0
-                      repeat_direction = 'forward'
-            elif element.tag == 'direction':
-              rehearsal=element.find('.//rehearsal')
-              if rehearsal is not None:
-                  musicxml['bookmarks'][-1] += rehearsal.text
+                        if pitch is not None:
+                            step = pitch.find('step')
+                            step = step.text if step is not None else ''
+                            alter = pitch.find('alter')
+                            alter = int(alter.text) if alter is not None else 0
+                            chord = element.find('chord')
+                            if chord is None:
+                                event_start = tick
+                            if tie_stop is None:
+                                if staff in ["1","2"]:
+                                    if fingering_el is not None and fingering_el.text:
+                                        fingering=fingering_el.text.split('-')
+                                        fingering = 's'.join([finger_convert[staff].get(finger,'-') for finger in fingering])
+                                    else:
+                                        fingering = "-"
+                                    hand = "R" if staff == "1" else "L"
+                                    musicxml['song_fingering'][int(staff)-1][-1].append({'tick':event_start, 'fingering':fingering})
+                                    musicxml['hand_part'][-1].append({'tick':event_start, 'hand':hand})
+                                    #print(f'S:{staff}T:{event_start}:{step}:{fingering} ')
+                        if chord is None:
+                            tick += duration
+                elif element.tag == 'forward':
+                    tick += duration
+                elif element.tag == 'backup':
+                    tick -= duration
+                elif element.tag == 'barline':
+                    ending = element.find('ending')
+                    if ending is not None:
+                        ending_number = int(ending.attrib.get('number'))
+                        ending_type = ending.attrib.get('type')
+                    repeat = element.find('repeat')
+                    if repeat is not None:
+                        repeat_direction = repeat.attrib['direction']
+                        if repeat_direction == 'forward':
+                            repeat_start = i
+                        elif repeat_direction == 'backward':
+                            repeat_times_el = repeat.attrib.get('times', '1')
+                            if repeat_times < int(repeat_times_el):
+                                repeat_times += 1
+                            else:
+                                repeat_start = 0
+                                repeat_direction = 'forward'
+                elif element.tag == 'direction':
+                    rehearsal=element.find('.//rehearsal')
+                    if rehearsal is not None:
+                        musicxml['bookmarks'][-1] += rehearsal.text
 
-          if repeat_direction == 'backward':
-            i = repeat_start
-            repeat_direction = 'forward'
-          elif repeat_direction == 'forward':
-            i += 1
-          if ending_number > 0 and not musicxml['song_fingering'][0][-1]:
-            musicxml['song_fingering'][0] = musicxml['song_fingering'][0][:-1]
-            musicxml['song_fingering'][1] = musicxml['song_fingering'][1][:-1]
-            musicxml['bookmarks'] = musicxml['bookmarks'][:-1]
-          if ending_type in ["stop","discontinue"]:
-            ending_number = 0
-            ending_type = None
+            if repeat_direction == 'backward':
+                i = repeat_start
+                repeat_direction = 'forward'
+            elif repeat_direction == 'forward':
+                i += 1
+            if ending_number > 0 and not musicxml['song_fingering'][0][-1]:
+                musicxml['song_fingering'][0] = musicxml['song_fingering'][0][:-1]
+                musicxml['song_fingering'][1] = musicxml['song_fingering'][1][:-1]
+                musicxml['bookmarks'] = musicxml['bookmarks'][:-1]
+            if ending_type in ["stop","discontinue"]:
+                ending_number = 0
+                ending_type = None
 
         bookmarks = ''
         for i, bookmark in enumerate(musicxml['bookmarks']):
             if bookmark:
-              bookmarks += f'{i+1},{bookmark};'
+                bookmarks += f'{i+1},{bookmark};'
         musicxml['bookmarks'] = bookmarks[:-1]
         for hand in range(2): # Left hand and right hand
-          for i, measure in enumerate(musicxml['song_fingering'][hand]):
-              entries_sorted = sorted(measure, key=lambda f: f['tick'])
-              fingering_sorted = [ f['fingering'] for f in entries_sorted ]
-              musicxml['song_fingering'][hand][i] = f' {"".join(fingering_sorted)}'
-          musicxml['song_fingering'][hand] = "".join(musicxml['song_fingering'][hand])
+            for i, measure in enumerate(musicxml['song_fingering'][hand]):
+                entries_sorted = sorted(measure, key=lambda f: f['tick'])
+                fingering_sorted = [ f['fingering'] for f in entries_sorted ]
+                musicxml['song_fingering'][hand][i] = f' {"".join(fingering_sorted)}'
+            musicxml['song_fingering'][hand] = "".join(musicxml['song_fingering'][hand])
         musicxml['song_fingering']  = "t1: " + musicxml['song_fingering'][1] + " t2: " + musicxml['song_fingering'][0]
         musicxml['hand_part'] = "t1: LA t2: RA"
         return musicxml

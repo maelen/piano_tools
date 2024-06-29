@@ -38,8 +38,22 @@ class MidiConversion:
         repeat_times = 0
         ending_number = 0
         ending_type = None
+        tocoda = False
+        dalsegno = False
+        segno = {}
+        dacapo = 0
         while i < len(measures):
             measure = measures[i]
+            print(f"Measure:{measure.get('number')}")
+            if tocoda:
+                sound = measure.find('.//sound')
+                if sound is not None:
+                    coda_att = sound.attrib.get('coda', None)
+                    if coda_att:
+                        tocoda = False
+                    else:
+                        i += 1
+                        continue
             attributes = measure.find('attributes')
             if attributes is not None:
                 # Midi Divisions
@@ -137,6 +151,30 @@ class MidiConversion:
                     rehearsal = element.xpath('direction-type/rehearsal')
                     if rehearsal:
                         midi_events.append({'tick':tick, 'event':MetaMessage('marker', text=f'{rehearsal[0].text}')})
+            sound = measure.find('.//sound')
+            if sound is not None:
+                segno_att = sound.attrib.get('segno', None)
+                if segno_att:
+                    if not segno_att in segno:
+                        segno[segno_att] = {'measure':i, 'repeat':0}
+                    else:
+                        segno[segno_att]['measure'] = i
+                dalsegno_att = sound.attrib.get('dalsegno', None)
+                if dalsegno_att and segno[dalsegno_att]['repeat'] < 2:
+                    print(f"dalsegno: {i+1}")
+                    dalsegno =  True
+                    i = segno[dalsegno_att]['measure']
+                    segno[dalsegno_att]['repeat'] += 1
+                    continue                                  
+                tocoda_att = sound.attrib.get('tocoda', None)
+                if tocoda_att:
+                    if dalsegno == True:
+                        tocoda = True 
+                dacapo_att = sound.attrib.get('dacapo', None)
+                if dacapo_att and dacapo < 1:
+                    dacapo = 1
+                    i = 0
+                    continue
             if repeat_direction == 'backward':
                 i = repeat_start
                 repeat_direction = 'forward'
@@ -145,6 +183,7 @@ class MidiConversion:
             if ending_type in ["stop","discontinue"]:
                 ending_number = 0
                 ending_type = None
+
         tracks = [MidiTrack(),MidiTrack(),MidiTrack()]
         previous_ticks = [0,0,0]
         midi_events = midi_events[1:]

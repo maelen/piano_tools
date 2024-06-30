@@ -20,6 +20,19 @@ class MidiConversion:
         return octave * 12 + cls.notes_base_value[step] + alter
 
     @classmethod
+    def get_note_string(cls, note):
+        pitch = note.find('pitch')
+        note_string = ""
+        if pitch is not None:
+            staff_el = note.find('staff')
+            if staff_el is not None:
+                staff = int(staff_el.text) - 1
+            else:
+                staff = 0
+            note_string = f"{staff}-{MidiConversion.get_midi_note(note.find('pitch'))}"
+        return note_string       
+
+    @classmethod
     def midi_conversion(cls, musicxml_filename, num_ticks=192, lesson_channel=3):
         lh_channel=lesson_channel-1
         rh_channel=lh_channel+1
@@ -42,18 +55,20 @@ class MidiConversion:
         dalsegno = False
         segno = {}
         dacapo = 0
+        ties = []
         while i < len(measures):
             measure = measures[i]
-            print(f"Measure:{measure.get('number')}")
             if tocoda:
                 sound = measure.find('.//sound')
+                coda_att = None
                 if sound is not None:
                     coda_att = sound.attrib.get('coda', None)
-                    if coda_att:
-                        tocoda = False
-                    else:
-                        i += 1
-                        continue
+                if coda_att:
+                    tocoda = False
+                else:
+                    i += 1
+                    continue
+            #print(f"Measure:{measure.get('number')}")
             attributes = measure.find('attributes')
             if attributes is not None:
                 # Midi Divisions
@@ -71,6 +86,13 @@ class MidiConversion:
                     midi_events.append({'tick':tick, 'event':MetaMessage('time_signature',
                               numerator=numerator,
                               denominator=denominator)})
+            if ties:
+                notes = measure.xpath("note")
+                for note in notes:
+                    note_string = MidiConversion.get_note_string(note)
+                    if note_string in ties:
+                        note.append( etree.Element("tie", type="stop"))
+                        ties.remove(note_string)
             staff = 0
             elements = measure.xpath("note|backup|forward|barline|direction")
             j=0
@@ -106,6 +128,10 @@ class MidiConversion:
                                                   channel=rh_channel if staff == 0 else lh_channel,
                                                   note=midi_value,
                                                   velocity=velocity)})
+                            else:
+                                note_string = f"{staff}-{midi_value}"
+                                if note_string in ties:
+                                    ties.remove(note_string)
                             if chord is None:
                                 tick += duration
                             if tie_start is None:
@@ -113,6 +139,8 @@ class MidiConversion:
                                                    channel=rh_channel if staff == 0 else lh_channel,
                                                    note=midi_value,
                                                    velocity=velocity)})
+                            else:
+                                ties.append(f"{staff}-{midi_value}")
                 elif element.tag == 'forward':
                     tick += duration
                 elif element.tag == 'backup':
@@ -161,7 +189,6 @@ class MidiConversion:
                         segno[segno_att]['measure'] = i
                 dalsegno_att = sound.attrib.get('dalsegno', None)
                 if dalsegno_att and segno[dalsegno_att]['repeat'] < 2:
-                    print(f"dalsegno: {i+1}")
                     dalsegno =  True
                     i = segno[dalsegno_att]['measure']
                     segno[dalsegno_att]['repeat'] += 1

@@ -69,22 +69,32 @@ class Synthesia:
         dalsegno = False
         segno = {}
         dacapo = 0
+        ties = []
         while i < len(measures):
             measure = measures[i]
             if tocoda:
                 sound = measure.find('.//sound')
+                coda_att = None
                 if sound is not None:
                     coda_att = sound.attrib.get('coda', None)
-                    if coda_att:
-                        tocoda = False
-                    else:
-                        i += 1
-                        continue
+                if coda_att:
+                    tocoda = False
+                else:
+                    i += 1
+                    continue
+            print(f"Measure:{measure.get('number')}")
             rehearsal=measure.find('.//rehearsal')
             musicxml['bookmarks'].append("")
             musicxml['song_fingering'][0].append([])
             musicxml['song_fingering'][1].append([])
             musicxml['hand_part'].append([])
+            if ties:
+                notes = measure.xpath("note")
+                for note in notes:
+                    note_string = MidiConversion.get_note_string(note)
+                    if note_string in ties:
+                        note.append( etree.Element("tie", type="stop"))
+                        ties.remove(note_string)            
             elements = measure.xpath("note|backup|forward|barline|direction")
             j=0
             while j < len(elements): # element in measure.xpath("note|backup|forward|barline|direction"):
@@ -109,10 +119,6 @@ class Synthesia:
                         tick += duration
                     else:
                         if pitch is not None:
-                            step = pitch.find('step')
-                            step = step.text if step is not None else ''
-                            alter = pitch.find('alter')
-                            alter = int(alter.text) if alter is not None else 0
                             chord = element.find('chord')
                             if chord is None:
                                 event_start = tick
@@ -126,9 +132,14 @@ class Synthesia:
                                     hand = "R" if staff == "1" else "L"
                                     musicxml['song_fingering'][int(staff)-1][-1].append({'tick':event_start, 'fingering':fingering})
                                     musicxml['hand_part'][-1].append({'tick':event_start, 'hand':hand})
-                                    #print(f'S:{staff}T:{event_start}:{step}:{fingering} ')
+                            else:
+                                note_string = MidiConversion.get_note_string(element)
+                                if note_string in ties:
+                                    ties.remove(note_string)                                
                         if chord is None:
                             tick += duration
+                        if tie_start is not None:
+                            ties.append(MidiConversion.get_note_string(element))
                 elif element.tag == 'forward':
                     tick += duration
                 elif element.tag == 'backup':

@@ -63,8 +63,11 @@ class Synthesia:
         repeat_start = 0
         repeat_direction =  'forward'
         repeat_times = 0
-        ending_number = 0
-        ending_type = None
+        repeat_count = 0
+        ending_stop = None
+        ending_discontinue = None
+        ending_number = []
+        ending_count = 1
         tocoda = False
         dalsegno = False
         segno = {}
@@ -82,7 +85,14 @@ class Synthesia:
                 else:
                     i += 1
                     continue
-            print(f"Measure:{measure.get('number')}")
+            ending_start = measure.find(".//ending[@type='start']")
+            if ending_start is not None:
+                ending_number = list(map(int, ending_start.attrib.get('number').split(',')))
+            if len(ending_number) > 0:                               
+                if ending_count != ending_number[0]:
+                    i += 1
+                    continue
+            #print(f"Measure:{measure.get('number')}")
             rehearsal=measure.find('.//rehearsal')
             musicxml['bookmarks'].append("")
             musicxml['song_fingering'][0].append([])
@@ -100,8 +110,6 @@ class Synthesia:
             while j < len(elements): # element in measure.xpath("note|backup|forward|barline|direction"):
                 element = elements[j]
                 j += 1
-                if ending_number > 0 and ending_number <= repeat_times and element.tag != 'barline':
-                    continue
                 grace = element.find("grace")
                 if grace is not None:
                     continue
@@ -145,21 +153,21 @@ class Synthesia:
                 elif element.tag == 'backup':
                     tick -= duration
                 elif element.tag == 'barline':
-                    ending = element.find('ending')
-                    if ending is not None:
-                        ending_number = int(ending.attrib.get('number'))
-                        ending_type = ending.attrib.get('type')
+                    ending_stop = element.find(".//ending[@type='stop']")
+                    ending_discontinue = element.find(".//ending[@type='discontinue']")
                     repeat = element.find('repeat')
                     if repeat is not None:
                         repeat_direction = repeat.attrib['direction']
                         if repeat_direction == 'forward':
                             repeat_start = i
                         elif repeat_direction == 'backward':
-                            repeat_times_el = repeat.attrib.get('times', '1')
-                            if repeat_times < int(repeat_times_el):
-                                repeat_times += 1
+                            repeat_times = int(repeat.attrib.get('times', '1'))
+                            if repeat_count < repeat_times:
+                                repeat_count += 1
                             else:
                                 repeat_start = 0
+                                repeat_count = 0
+                                repeat_times = 0
                                 repeat_direction = 'forward'
                 elif element.tag == 'direction':
                     rehearsal=element.find('.//rehearsal')
@@ -193,13 +201,16 @@ class Synthesia:
                 repeat_direction = 'forward'
             elif repeat_direction == 'forward':
                 i += 1
-            if ending_number > 0 and not musicxml['song_fingering'][0][-1]:
+            if repeat_count > 0 and not musicxml['song_fingering'][0][-1]:
                 musicxml['song_fingering'][0] = musicxml['song_fingering'][0][:-1]
                 musicxml['song_fingering'][1] = musicxml['song_fingering'][1][:-1]
                 musicxml['bookmarks'] = musicxml['bookmarks'][:-1]
-            if ending_type in ["stop","discontinue"]:
-                ending_number = 0
-                ending_type = None
+            if ending_stop is not None:
+                ending_count = ending_number[0]+1
+                ending_number = []
+                ending_stop = None
+            elif ending_discontinue is not None:
+                ending_discontinue = None                
 
         bookmarks = ''
         for i, bookmark in enumerate(musicxml['bookmarks']):

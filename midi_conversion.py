@@ -30,7 +30,7 @@ class MidiConversion:
             else:
                 staff = 0
             note_string = f"{staff}-{MidiConversion.get_midi_note(note.find('pitch'))}"
-        return note_string       
+        return note_string
 
     @classmethod
     def midi_conversion(cls, musicxml_filename, num_ticks=192, lesson_channel=3):
@@ -74,11 +74,11 @@ class MidiConversion:
             ending_start = measure.find(".//ending[@type='start']")
             if ending_start is not None:
                 ending_number = list(map(int, ending_start.attrib.get('number').split(',')))
-            if len(ending_number) > 0:                               
+            if len(ending_number) > 0:
                 if ending_count != ending_number[0]:
                     i += 1
                     continue
-            print(f"Measure:{measure.get('number')}")
+            #print(f"Measure:{measure.get('number')}")
             attributes = measure.find('attributes')
             if attributes is not None:
                 # Midi Divisions
@@ -200,11 +200,11 @@ class MidiConversion:
                     dalsegno =  True
                     i = segno[dalsegno_att]['measure']
                     segno[dalsegno_att]['repeat'] += 1
-                    continue                                  
+                    continue
                 tocoda_att = sound.attrib.get('tocoda', None)
                 if tocoda_att:
                     if dalsegno == True:
-                        tocoda = True 
+                        tocoda = True
                 dacapo_att = sound.attrib.get('dacapo', None)
                 if dacapo_att and dacapo < 1:
                     dacapo = 1
@@ -220,26 +220,26 @@ class MidiConversion:
                 ending_number = []
                 ending_stop = None
             elif ending_discontinue is not None:
-                ending_discontinue = None                
+                ending_discontinue = None
 
         tracks = [MidiTrack(),MidiTrack(),MidiTrack()]
         previous_ticks = [0,0,0]
         midi_events = midi_events[1:]
         for entry in sorted(midi_events, key=lambda i: i['tick']) :
             if entry['event'].is_meta == True:
-                track_id = 0 
+                track_id = 0
             elif entry['event'].channel == lh_channel:
                 track_id = 1
             elif entry['event'].channel == rh_channel:
                 track_id = 2
             updated_event = entry['event'].copy(time=entry['tick'] - previous_ticks[track_id])
             tracks[track_id].append(updated_event)
-            previous_ticks[track_id] = entry['tick']        
+            previous_ticks[track_id] = entry['tick']
             logging.info('E {}:{}'.format(entry['tick'], updated_event))
 
         return tracks
 
-    @classmethod    
+    @classmethod
     def write_midi(cls, tracks, midi_file, num_ticks=192):
         midi_attributes = {'divisions':num_ticks}
         mid = MidiFile(type=1, ticks_per_beat=midi_attributes['divisions'])

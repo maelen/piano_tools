@@ -7,6 +7,7 @@ import sys
 import subprocess
 import hashlib
 from lxml import etree
+import html
 from midi_conversion import MidiConversion
 
 finger_convert = {"1":{"1":"6",
@@ -19,6 +20,14 @@ finger_convert = {"1":{"1":"6",
                        "3":"3",
                        "4":"4",
                        "5":"5"}}
+
+def fix_metadata(entry):
+  output = ''
+  if isinstance(entry, int):
+    output = str(entry)
+  elif isinstance(entry, str):
+    output = html.escape(entry, quote=True)
+  return output
 
 class Synthesia:
 
@@ -39,16 +48,16 @@ class Synthesia:
         metadata = {}
         for element in metatag_el:
             metatag[element.get('name')]=element.text
-        metadata['title']=metatag.get('workTitle')
-        metadata['subtitle']=metatag.get('subtitle')
-        metadata['rating']=metatag.get('rating', 1)
-        metadata['difficulty']=metatag.get('difficulty', 1)
-        metadata['composer']=metatag.get('composer')
-        metadata['arranger']=metatag.get('arranger')
-        metadata['copy_right']=metatag.get('copyright')
-        metadata['tags']=metatag.get('tags')
-        metadata['group']=metatag.get('group')
-        metadata['subgroup']=metatag.get('subgroup')
+        metadata['title']=fix_metadata(metatag.get('workTitle', ''))
+        metadata['subtitle']=fix_metadata(metatag.get('subtitle', ''))
+        metadata['rating']=fix_metadata(metatag.get('rating', 1))
+        metadata['difficulty']=fix_metadata(metatag.get('difficulty', 1))
+        metadata['composer']=fix_metadata(metatag.get('composer', ''))
+        metadata['arranger']=fix_metadata(metatag.get('arranger', ''))
+        metadata['copy_right']=fix_metadata(metatag.get('copyright', ''))
+        metadata['tags']=fix_metadata(metatag.get('tags', ''))
+        metadata['group']=fix_metadata(metatag.get('group', ''))
+        metadata['subgroup']=fix_metadata(metatag.get('subgroup', ''))
         return metadata
 
     @classmethod
@@ -88,7 +97,7 @@ class Synthesia:
             ending_start = measure.find(".//ending[@type='start']")
             if ending_start is not None:
                 ending_number = list(map(int, ending_start.attrib.get('number').split(',')))
-            if len(ending_number) > 0:                               
+            if len(ending_number) > 0:
                 if ending_count != ending_number[0]:
                     i += 1
                     continue
@@ -103,8 +112,9 @@ class Synthesia:
                 for note in notes:
                     note_string = MidiConversion.get_note_string(note)
                     if note_string in ties:
-                        note.append( etree.Element("tie", type="stop"))
-                        ties.remove(note_string)            
+                        tie_child = etree.SubElement(note, "tie")
+                        tie_child.set('type', "stop")
+                        ties.remove(note_string)
             elements = measure.xpath("note|backup|forward|barline|direction")
             j=0
             while j < len(elements): # element in measure.xpath("note|backup|forward|barline|direction"):
@@ -143,7 +153,7 @@ class Synthesia:
                             else:
                                 note_string = MidiConversion.get_note_string(element)
                                 if note_string in ties:
-                                    ties.remove(note_string)                                
+                                    ties.remove(note_string)
                         if chord is None:
                             tick += duration
                         if tie_start is not None:
@@ -186,11 +196,11 @@ class Synthesia:
                     dalsegno =  True
                     i = segno[dalsegno_att]['measure']
                     segno[dalsegno_att]['repeat'] += 1
-                    continue                                  
+                    continue
                 tocoda_att = sound.attrib.get('tocoda', None)
                 if tocoda_att:
                     if dalsegno == True:
-                        tocoda = True 
+                        tocoda = True
                 dacapo_att = sound.attrib.get('dacapo', None)
                 if dacapo_att and dacapo < 1:
                     dacapo = 1
@@ -210,7 +220,7 @@ class Synthesia:
                 ending_number = []
                 ending_stop = None
             elif ending_discontinue is not None:
-                ending_discontinue = None                
+                ending_discontinue = None
 
         bookmarks = ''
         for i, bookmark in enumerate(musicxml['bookmarks']):
@@ -241,7 +251,7 @@ class Synthesia:
             sys.exit(1)
 
         midi_tracks = MidiConversion.midi_conversion(musicxml_filename)
-        MidiConversion.write_midi(midi_tracks, midi_filename)        
+        MidiConversion.write_midi(midi_tracks, midi_filename)
         unique_id = Synthesia.process_unique_id(midi_filename)
         metadata = Synthesia.process_metadata(mscx_filename)
         xmldata = Synthesia.process_musicxml(musicxml_filename)
@@ -288,8 +298,7 @@ def main():
     groups=""
 
     metadata_text = \
-f"""
-<?xml version="1.0" encoding="UTF-8" ?>
+f"""<?xml version="1.0" encoding="UTF-8" ?>
 <SynthesiaMetadata Version="1">
   {songs}{groups}
 </SynthesiaMetadata>"""

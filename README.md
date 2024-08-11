@@ -22,15 +22,11 @@
     <img src="docs/assets/piano-logo.jpg" alt="Logo" width="80" height="80">
   </a>
 
-<h3 align="center">project_title</h3>
+<h3 align="center">Piano Tools</h3>
 
   <p align="center">
-    project_description
+    Generate Lessons for a midi piano/keyboard. And, useful scripts to use with my piano. 
     <br />
-    <a href="https://github.com/maelen/piano_tools"><strong>Explore the docs »</strong></a>
-    <br />
-    <br />
-    <a href="https://github.com/maelen/piano_tools">View Demo</a>
     ·
     <a href="https://github.com/maelen/piano_tools/issues">Report Bug</a>
     ·
@@ -68,51 +64,42 @@
 
 [![Product Name Screen Shot][product-screenshot]](https://example.com)
 
-I started this project because I wanted to easily add piano lessons to my Casio piano.
+I started this project because I wanted to easily add piano lessons to my Casio piano. I have moved on to Synthesia now.
+The xml2casiomidi.py script is still there but I have not tested it in a while. Currently the midi module splits hand parts using different tracks.
+This probably does not work well with Casio piano that have the lesson mode.
 
-The main script is called xml2casiomidi.py. This can be used with the step up lessons mode.
-You`ll need to transfer the files or load them on an sd card. It also works with Pianobooster (Left and Right hand parts only), Chordana, Casio Music Space
+The script to use to generate Synthesia lessons is xml2synthesia.py. The midi files should work with Pianobooster (Left and Right hand parts only).
+And, I do not know if it works with Chordana and Casio Music Space.
 
-Using a musicxml or Musescore file, xml2casiomidi converts the file to a midi file.
-
-It can:
-- separate the left and right hand parts
-- split the score into smaller parts
-- generate a backtrack with a metronome and the chord symbols
-
-There is now also xml2synthesia.py. It will create Synthesia lessons using a musicxml file or musescore3 file.
-
-There is only one argument required which is the folder where music files can be found. Musescore must be in your search path.
+xml2synthesia.py generates a midi file for each musicxml or Musescore file found in a folder and creates the metadata.synthesia file needed by Synthesia.
 
 It can:
 - separate the left and right hand parts
 - Use the metadata to configure the title, subtitle, rank and difficulty
 - Set bookmarks
 
+The script requires one argument which is the folder where the music files can be found. Musescore must be in your search path.
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 <!-- GETTING STARTED -->
 ## Getting Started
 
-xml2casiomidi.py:
-It is used from the command line.
-
-In its simplest form, all you need to do is type ./xml2casiomidi.py <musicxml or Musescore file>. This will generate a midi file in the same folder than the musicxml or musescore file.
-
-The full list of arguments can be obtained by typing ./xml2casiomidi.py -h
-
-There is also a .mma file that is generated. The file can be used to generate a more interesting backtrack.
-
 xml2synthesia.py:
 It is used from the command line.
 
-Type ./xml2synthesia.py <Folder that contains musicxml or musescore 3 files>
+Type ./xml2synthesia.py <Folder with music files>
+
+The full list of arguments can be obtained by typing ./xml2synthesia.py -h
+
 
 ### Prerequisites
 
-xml2casiomidi was developped on linux and uses Python 3.6+.
+Scripts work with linux and use Python 3.6+.
 
-It should work on other platforms but you need to add Musescore and MMA to your search path. I haven't tried Windows and Mac, so there might be some issues.
+They should work on other platforms but you need to add Musescore 3. I haven't tried Windows and Mac, so there might be some issues.
+
 
 ### Installation
 
@@ -120,11 +107,10 @@ It should work on other platforms but you need to add Musescore and MMA to your 
    ```sh
    git clone https://github.com/maelen/piano_tools.git
    ```
-2. Download and install Musescore
+2. Download and install Musescore 3
 
-3. Download and install MMA
 
-3. Add Musescore and MMA to your search path (Not needed on Linux)
+3. Add Musescore to your search path (Not needed on Linux)
 
 4. Install the Mido library
    ```sh
@@ -132,29 +118,6 @@ It should work on other platforms but you need to add Musescore and MMA to your 
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-<!-- USAGE EXAMPLES -->
-## Usage
-```sh
-xml2casiomidi.py [-h] [-c CHANNEL] [-nr] [-w] [-d DEBUG] input [output]
-
-positional arguments:
-  input                 musicxml or musescore input file
-  output                optional output file if not using default
-
-options:
-  -h, --help            show this help message and exit
-  -c CHANNEL, --channel CHANNEL
-                        Midi channel used for left hand. Right hand uses next channel
-  -nr, --norepeat       Don't reuse last chord for next measures
-  -w, --overwrite       Regenerate accompaniment mma file even if it exists
-  -d DEBUG, --debug DEBUG
-                        Select log level used for debugging
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-```
 
 
 <!-- CONTRIBUTING -->
@@ -174,14 +137,12 @@ Don't forget to give the project a star! Thanks again!
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
-
 <!-- LICENSE -->
 ## License
 
 Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 
 <!-- CONTACT -->
@@ -194,7 +155,6 @@ Open an issue if you wish to contact me. I'm trying to cut down on spam :) You c
 Project Link: [https://github.com/maelen/piano_tools](https://github.com/maelen/piano_tools)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 
 <!-- MARKDOWN LINKS & IMAGES -->

@@ -5,8 +5,6 @@ from lxml import etree
 import multitimer
 
 
-
-
 class MidiConversion:
 
     notes_base_value = {'C':12, 'D':14, 'E':16, 'F':17, 'G':19, 'A':21, 'B':23}
@@ -22,18 +20,65 @@ class MidiConversion:
         return octave * 12 + cls.notes_base_value[step] + alter
 
     @classmethod
-    def midi_conversion(cls, xml_file, num_ticks=192, lesson_channel=3):
+    def get_note_string(cls, note):
+        pitch = note.find('pitch')
+        note_string = ""
+        if pitch is not None:
+            staff_el = note.find('staff')
+            if staff_el is not None:
+                staff = int(staff_el.text) - 1
+            else:
+                staff = 0
+            note_string = f"{staff}-{MidiConversion.get_midi_note(note.find('pitch'))}"
+        return note_string
+
+    @classmethod
+    def midi_conversion(cls, musicxml_filename, num_ticks=192, lesson_channel=3):
         lh_channel=lesson_channel-1
         rh_channel=lh_channel+1
         midi_events = [{'divisions':num_ticks}]
-        tree = etree.parse(xml_file)
+        tree = etree.parse(musicxml_filename)
         part = tree.xpath('/score-partwise/part')
         event_start = 0
         tick = 0
         velocity = 90
         multiplier = 1
         tempo = None
-        for measure in part[0].xpath("measure"):
+        i=0
+        measures=part[0].xpath("measure")
+        repeat_start = 0
+        repeat_direction =  'forward'
+        repeat_times = 0
+        repeat_count = 0
+        ending_stop = None
+        ending_discontinue = None
+        ending_number = []
+        ending_count = 1
+        tocoda = False
+        dalsegno = False
+        segno = {}
+        dacapo = 0
+        ties = []
+        while i < len(measures):
+            measure = measures[i]
+            if tocoda:
+                sound = measure.find('.//sound')
+                coda_att = None
+                if sound is not None:
+                    coda_att = sound.attrib.get('coda', None)
+                if coda_att:
+                    tocoda = False
+                else:
+                    i += 1
+                    continue
+            ending_start = measure.find(".//ending[@type='start']")
+            if ending_start is not None:
+                ending_number = list(map(int, ending_start.attrib.get('number').split(',')))
+            if len(ending_number) > 0:
+                if ending_count != ending_number[0]:
+                    i += 1
+                    continue
+            #print(f"Measure:{measure.get('number')}")
             attributes = measure.find('attributes')
             if attributes is not None:
                 # Midi Divisions
@@ -51,12 +96,22 @@ class MidiConversion:
                     midi_events.append({'tick':tick, 'event':MetaMessage('time_signature',
                               numerator=numerator,
                               denominator=denominator)})
-
+            if ties:
+                notes = measure.xpath("note")
+                for note in notes:
+                    note_string = MidiConversion.get_note_string(note)
+                    if note_string in ties:
+                        note.append( etree.Element("tie", type="stop"))
+                        ties.remove(note_string)
             staff = 0
-            for element in measure.xpath("note|backup|forward|direction"):
+            elements = measure.xpath("note|backup|forward|barline|direction")
+            j=0
+            while j < len(elements):
+                element = elements[j]
+                j += 1
                 grace = element.find("grace")
                 if grace is not None:
-                  continue
+                    continue
                 duration = element.find("duration")
                 if duration is not None:
                     duration = int(int(duration.text) * multiplier) if duration is not None else 0
@@ -81,6 +136,10 @@ class MidiConversion:
                                                   channel=rh_channel if staff == 0 else lh_channel,
                                                   note=midi_value,
                                                   velocity=velocity)})
+                            else:
+                                note_string = f"{staff}-{midi_value}"
+                                if note_string in ties:
+                                    ties.remove(note_string)
                             if chord is None:
                                 tick += duration
                             if tie_start is None:
@@ -88,38 +147,104 @@ class MidiConversion:
                                                    channel=rh_channel if staff == 0 else lh_channel,
                                                    note=midi_value,
                                                    velocity=velocity)})
+                            else:
+                                ties.append(f"{staff}-{midi_value}")
                 elif element.tag == 'forward':
                     tick += duration
                 elif element.tag == 'backup':
                     tick -= duration
+                elif element.tag == 'barline':
+                    ending_stop = element.find(".//ending[@type='stop']")
+                    ending_discontinue = element.find(".//ending[@type='discontinue']")
+                    repeat = element.find('repeat')
+                    if repeat is not None:
+                        repeat_direction = repeat.attrib['direction']
+                        if repeat_direction == 'forward':
+                            repeat_start = i
+                        elif repeat_direction == 'backward':
+                            repeat_times = int(repeat.attrib.get('times', '1'))
+                            if repeat_count < repeat_times:
+                                repeat_count += 1
+                            else:
+                                repeat_start = 0
+                                repeat_count = 0
+                                repeat_times = 0
+                                repeat_direction = 'forward'
                 elif element.tag == 'direction':
-                  sound = element.find('sound')
-                  if sound is not None:
-                      # Midi Tempo
-                      if tempo is None:
-                        tempo_tmp = sound.get('tempo')
-                        if tempo_tmp is not None:
-                            tempo = tempo_tmp
-                            midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(int(tempo)))})
-                      # Set Midi Current Velocity
-                      dynamics = sound.get('dynamics')
-                      if dynamics is not None:
-                          velocity = int(round(float(dynamics)))
-                  # Midi Marker
-                  rehearsal = element.xpath('direction-type/rehearsal')
-                  if rehearsal:
-                      midi_events.append({'tick':tick, 'event':MetaMessage('marker', text=f'{rehearsal[0].text}')})
+                    sound = element.find('sound')
+                    if sound is not None:
+                        # Midi Tempo
+                        if tempo is None:
+                            tempo_tmp = sound.get('tempo')
+                            if tempo_tmp is not None:
+                                tempo = tempo_tmp
+                                midi_events.append({'tick':tick, 'event':MetaMessage('set_tempo', tempo=bpm2tempo(int(tempo)))})
+                        # Set Midi Current Velocity
+                        dynamics = sound.get('dynamics')
+                        if dynamics is not None:
+                            velocity = int(round(float(dynamics)))
+                    # Midi Marker
+                    rehearsal = element.xpath('direction-type/rehearsal')
+                    if rehearsal:
+                        midi_events.append({'tick':tick, 'event':MetaMessage('marker', text=f'{rehearsal[0].text}')})
+            sound = measure.find('.//sound')
+            if sound is not None:
+                segno_att = sound.attrib.get('segno', None)
+                if segno_att:
+                    if not segno_att in segno:
+                        segno[segno_att] = {'measure':i, 'repeat':0}
+                    else:
+                        segno[segno_att]['measure'] = i
+                dalsegno_att = sound.attrib.get('dalsegno', None)
+                if dalsegno_att and segno[dalsegno_att]['repeat'] < 2:
+                    dalsegno =  True
+                    i = segno[dalsegno_att]['measure']
+                    segno[dalsegno_att]['repeat'] += 1
+                    continue
+                tocoda_att = sound.attrib.get('tocoda', None)
+                if tocoda_att:
+                    if dalsegno == True:
+                        tocoda = True
+                dacapo_att = sound.attrib.get('dacapo', None)
+                if dacapo_att and dacapo < 1:
+                    dacapo = 1
+                    i = 0
+                    continue
+            if repeat_direction == 'backward':
+                i = repeat_start
+                repeat_direction = 'forward'
+            elif repeat_direction == 'forward':
+                i += 1
+            if ending_stop is not None:
+                ending_count = ending_number[0]+1
+                ending_number = []
+                ending_stop = None
+            elif ending_discontinue is not None:
+                ending_discontinue = None
 
-        track = MidiTrack()
-        previous_tick = 0
+        tracks = [MidiTrack(),MidiTrack(),MidiTrack()]
+        previous_ticks = [0,0,0]
         midi_events = midi_events[1:]
         for entry in sorted(midi_events, key=lambda i: i['tick']) :
-            updated_event = entry['event'].copy(time=entry['tick'] - previous_tick)
-            track.append(updated_event)
+            if entry['event'].is_meta == True:
+                track_id = 0
+            elif entry['event'].channel == lh_channel:
+                track_id = 1
+            elif entry['event'].channel == rh_channel:
+                track_id = 2
+            updated_event = entry['event'].copy(time=entry['tick'] - previous_ticks[track_id])
+            tracks[track_id].append(updated_event)
+            previous_ticks[track_id] = entry['tick']
             logging.info('E {}:{}'.format(entry['tick'], updated_event))
-            previous_tick = entry['tick']
 
-        return track
+        return tracks
+
+    @classmethod
+    def write_midi(cls, tracks, midi_file, num_ticks=192):
+        midi_attributes = {'divisions':num_ticks}
+        mid = MidiFile(type=1, ticks_per_beat=midi_attributes['divisions'])
+        mid.tracks.extend(tracks)
+        mid.save(midi_file)
 
 
 class MidiComparator:

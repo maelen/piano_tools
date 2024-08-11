@@ -7,6 +7,8 @@ import sys
 import subprocess
 import hashlib
 from lxml import etree
+import html
+from midi_conversion import MidiConversion
 
 finger_convert = {"1":{"1":"6",
                        "2":"7",
@@ -18,6 +20,14 @@ finger_convert = {"1":{"1":"6",
                        "3":"3",
                        "4":"4",
                        "5":"5"}}
+
+def fix_metadata(entry):
+  output = ''
+  if isinstance(entry, int):
+    output = str(entry)
+  elif isinstance(entry, str):
+    output = html.escape(entry, quote=True)
+  return output
 
 class Synthesia:
 
@@ -38,133 +48,191 @@ class Synthesia:
         metadata = {}
         for element in metatag_el:
             metatag[element.get('name')]=element.text
-        metadata['title']=metatag.get('workTitle')
-        metadata['subtitle']=metatag.get('subtitle')
-        metadata['rating']=metatag.get('rating', 1)
-        metadata['difficulty']=metatag.get('difficulty', 1)
-        metadata['composer']=metatag.get('composer')
-        metadata['arranger']=metatag.get('arranger')
-        metadata['copy_right']=metatag.get('copyright')
-        metadata['tags']=metatag.get('tags')
-        metadata['group']=metatag.get('group')
-        metadata['subgroup']=metatag.get('subgroup')
+        metadata['title']=fix_metadata(metatag.get('workTitle', ''))
+        metadata['subtitle']=fix_metadata(metatag.get('subtitle', ''))
+        metadata['rating']=fix_metadata(metatag.get('rating', 1))
+        metadata['difficulty']=fix_metadata(metatag.get('difficulty', 1))
+        metadata['composer']=fix_metadata(metatag.get('composer', ''))
+        metadata['arranger']=fix_metadata(metatag.get('arranger', ''))
+        metadata['copy_right']=fix_metadata(metatag.get('copyright', ''))
+        metadata['tags']=fix_metadata(metatag.get('tags', ''))
+        metadata['group']=fix_metadata(metatag.get('group', ''))
+        metadata['subgroup']=fix_metadata(metatag.get('subgroup', ''))
         return metadata
 
     @classmethod
     def process_musicxml(cls, musicxml_filename):
-        musicxml = {}
         musicxml_tree = etree.parse(musicxml_filename)
         part = musicxml_tree.xpath('/score-partwise/part')
 
         tick = 0
-        musicxml = {'song_fingering': [], 'bookmarks': [], 'hand_part': []}
+        musicxml = {'song_fingering': [[],[]], 'bookmarks': [], 'hand_part': []}
+        #special_elements = musicxml_tree.xpath(".//ending | .//sound[@segno] | .//sound[@dalsegno] | .//sound[@tocoda] | .//sound[@dacapo]")
+        musicxml['file_type'] = "mid" #if special_elements else "mxl"
         i=0
         measures=part[0].xpath("measure")
         repeat_start = 0
         repeat_direction =  'forward'
         repeat_times = 0
-        ending_number = 0
-        ending_type = None
+        repeat_count = 0
+        ending_stop = None
+        ending_discontinue = None
+        ending_number = []
+        ending_count = 1
+        tocoda = False
+        dalsegno = False
+        segno = {}
+        dacapo = 0
+        ties = []
         while i < len(measures):
-          measure = measures[i]
-          rehearsal=measure.find('.//rehearsal')
-          musicxml['bookmarks'].append("")
-          musicxml['song_fingering'].append([])
-          musicxml['hand_part'].append([])
-          for element in measure.xpath("note|backup|forward|barline|direction"):
-            if ending_number > 0 and ending_number <= repeat_times and element.tag != 'barline':
-              continue
-            grace = element.find("grace")
-            if grace is not None:
-              continue
-            duration = element.find("duration")
-            if duration is not None:
-              duration = int(int(duration.text)) if duration is not None else 0
-            if element.tag == 'note':
-              staff = element.find('staff').text
-              fingering_el = element.find('notations/technical/fingering')
-              rest = element.find('rest')
-              pitch = element.find('pitch')
-              tie_start = element.find('tie[@type="start"]')
-              tie_stop = element.find('tie[@type="stop"]')
-              if rest is not None:
-                  tick += duration
-              else:
-                if pitch is not None:
-                  step = pitch.find('step')
-                  step = step.text if step is not None else ''
-                  alter = pitch.find('alter')
-                  alter = int(alter.text) if alter is not None else 0
-                  chord = element.find('chord')
-                  if chord is None:
-                    event_start = tick
-                  if tie_stop is None:
-                    if staff in ["1","2"]:
-                      if fingering_el is not None and fingering_el.text:
-                        fingering=fingering_el.text.split('-')
-                        fingering = 's'.join([finger_convert[staff].get(finger,'-') for finger in fingering])
-                      else:
-                        fingering = "-"
-                      hand = "R" if staff == "1" else "L"
-                      musicxml['song_fingering'][-1].append({'tick':event_start, 'fingering':fingering})
-                      musicxml['hand_part'][-1].append({'tick':event_start, 'hand':hand})
-                      #print(f'S:{staff}T:{event_start}:{step}:{fingering} ')
-                  if chord is None:
-                    tick += duration
-            elif element.tag == 'forward':
-              tick += duration
-            elif element.tag == 'backup':
-              tick -= duration
-            elif element.tag == 'barline':
-              ending = element.find('ending')
-              if ending is not None:
-                ending_number = int(ending.attrib.get('number'))
-                ending_type = ending.attrib.get('type')
-              repeat = element.find('repeat')
-              if repeat is not None:
-                  repeat_direction = repeat.attrib['direction']
-                  if repeat_direction == 'forward':
-                    repeat_start = i
-                  elif repeat_direction == 'backward':
-                    repeat_times_el = repeat.attrib.get('times', '1')
-                    if repeat_times < int(repeat_times_el):
-                      repeat_times += 1
+            measure = measures[i]
+            if tocoda:
+                sound = measure.find('.//sound')
+                coda_att = None
+                if sound is not None:
+                    coda_att = sound.attrib.get('coda', None)
+                if coda_att:
+                    tocoda = False
+                else:
+                    i += 1
+                    continue
+            ending_start = measure.find(".//ending[@type='start']")
+            if ending_start is not None:
+                ending_number = list(map(int, ending_start.attrib.get('number').split(',')))
+            if len(ending_number) > 0:
+                if ending_count != ending_number[0]:
+                    i += 1
+                    continue
+            #print(f"Measure:{measure.get('number')}")
+            rehearsal=measure.find('.//rehearsal')
+            musicxml['bookmarks'].append("")
+            musicxml['song_fingering'][0].append([])
+            musicxml['song_fingering'][1].append([])
+            musicxml['hand_part'].append([])
+            if ties:
+                notes = measure.xpath("note")
+                for note in notes:
+                    note_string = MidiConversion.get_note_string(note)
+                    if note_string in ties:
+                        tie_child = etree.SubElement(note, "tie")
+                        tie_child.set('type', "stop")
+                        ties.remove(note_string)
+            elements = measure.xpath("note|backup|forward|barline|direction")
+            j=0
+            while j < len(elements): # element in measure.xpath("note|backup|forward|barline|direction"):
+                element = elements[j]
+                j += 1
+                grace = element.find("grace")
+                if grace is not None:
+                    continue
+                duration = element.find("duration")
+                if duration is not None:
+                    duration = int(int(duration.text)) if duration is not None else 0
+                if element.tag == 'note':
+                    staff = element.find('staff').text
+                    fingering_el = element.find('notations/technical/fingering')
+                    rest = element.find('rest')
+                    pitch = element.find('pitch')
+                    tie_start = element.find('tie[@type="start"]')
+                    tie_stop = element.find('tie[@type="stop"]')
+                    if rest is not None:
+                        tick += duration
                     else:
-                      repeat_start = 0
-                      repeat_direction = 'forward'
-            elif element.tag == 'direction':
-              rehearsal=element.find('.//rehearsal')
-              if rehearsal is not None:
-                  musicxml['bookmarks'][-1] += rehearsal.text
-
-          if repeat_direction == 'backward':
-            i = repeat_start
-            repeat_direction = 'forward'
-          elif repeat_direction == 'forward':
-            i += 1
-          if ending_number > 0 and not musicxml['song_fingering'][-1]:
-            musicxml['song_fingering'] = musicxml['song_fingering'][:-1]
-            musicxml['bookmarks'] = musicxml['bookmarks'][:-1]
-          if ending_type in ["stop","discontinue"]:
-            ending_number = 0
-            ending_type = None
+                        if pitch is not None:
+                            chord = element.find('chord')
+                            if chord is None:
+                                event_start = tick
+                            if tie_stop is None:
+                                if staff in ["1","2"]:
+                                    if fingering_el is not None and fingering_el.text:
+                                        fingering=fingering_el.text.split('-')
+                                        fingering = 's'.join([finger_convert[staff].get(finger,'-') for finger in fingering])
+                                    else:
+                                        fingering = "-"
+                                    hand = "R" if staff == "1" else "L"
+                                    musicxml['song_fingering'][int(staff)-1][-1].append({'tick':event_start, 'fingering':fingering})
+                                    musicxml['hand_part'][-1].append({'tick':event_start, 'hand':hand})
+                            else:
+                                note_string = MidiConversion.get_note_string(element)
+                                if note_string in ties:
+                                    ties.remove(note_string)
+                        if chord is None:
+                            tick += duration
+                        if tie_start is not None:
+                            ties.append(MidiConversion.get_note_string(element))
+                elif element.tag == 'forward':
+                    tick += duration
+                elif element.tag == 'backup':
+                    tick -= duration
+                elif element.tag == 'barline':
+                    ending_stop = element.find(".//ending[@type='stop']")
+                    ending_discontinue = element.find(".//ending[@type='discontinue']")
+                    repeat = element.find('repeat')
+                    if repeat is not None:
+                        repeat_direction = repeat.attrib['direction']
+                        if repeat_direction == 'forward':
+                            repeat_start = i
+                        elif repeat_direction == 'backward':
+                            repeat_times = int(repeat.attrib.get('times', '1'))
+                            if repeat_count < repeat_times:
+                                repeat_count += 1
+                            else:
+                                repeat_start = 0
+                                repeat_count = 0
+                                repeat_times = 0
+                                repeat_direction = 'forward'
+                elif element.tag == 'direction':
+                    rehearsal=element.find('.//rehearsal')
+                    if rehearsal is not None:
+                        musicxml['bookmarks'][-1] += rehearsal.text
+            sound = measure.find('.//sound')
+            if sound is not None:
+                segno_att = sound.attrib.get('segno', None)
+                if segno_att:
+                    if not segno_att in segno:
+                        segno[segno_att] = {'measure':i, 'repeat':0}
+                    else:
+                        segno[segno_att]['measure'] = i
+                dalsegno_att = sound.attrib.get('dalsegno', None)
+                if dalsegno_att and segno[dalsegno_att]['repeat'] < 1:
+                    dalsegno =  True
+                    i = segno[dalsegno_att]['measure']
+                    segno[dalsegno_att]['repeat'] += 1
+                    continue
+                tocoda_att = sound.attrib.get('tocoda', None)
+                if tocoda_att:
+                    if dalsegno == True:
+                        tocoda = True
+                dacapo_att = sound.attrib.get('dacapo', None)
+                if dacapo_att and dacapo < 1:
+                    dacapo = 1
+                    i = 0
+                    continue
+            if repeat_direction == 'backward':
+                i = repeat_start
+                repeat_direction = 'forward'
+            elif repeat_direction == 'forward':
+                i += 1
+            if ending_stop is not None:
+                ending_count = ending_number[0]+1
+                ending_number = []
+                ending_stop = None
+            elif ending_discontinue is not None:
+                ending_discontinue = None
 
         bookmarks = ''
         for i, bookmark in enumerate(musicxml['bookmarks']):
             if bookmark:
-              bookmarks += f'{i+1},{bookmark};'
+                bookmarks += f'{i+1},{bookmark};'
         musicxml['bookmarks'] = bookmarks[:-1]
-        for i, measure in enumerate(musicxml['song_fingering']):
-            entries_sorted = sorted(measure, key=lambda f: f['tick'])
-            fingering_sorted = [ f['fingering'] for f in entries_sorted ]
-            musicxml['song_fingering'][i] = f' m{i+1}: {"".join(fingering_sorted)}'
-        musicxml['song_fingering'] = "".join(musicxml['song_fingering'])
-
-        for i, measure in enumerate(musicxml['hand_part']):
-            entries_sorted = sorted(measure, key=lambda f: f['tick'])
-            hand_part_sorted = [ f['hand'] for f in entries_sorted ]
-            musicxml['hand_part'][i] = f' m{i+1}: {"".join(hand_part_sorted)}'
-        musicxml['hand_part'] = "".join(musicxml['hand_part'])
+        for hand in range(2): # Left hand and right hand
+            for i, measure in enumerate(musicxml['song_fingering'][hand]):
+                entries_sorted = sorted(measure, key=lambda f: f['tick'])
+                fingering_sorted = [ f['fingering'] for f in entries_sorted ]
+                musicxml['song_fingering'][hand][i] = f' {"".join(fingering_sorted)}'
+            musicxml['song_fingering'][hand] = "".join(musicxml['song_fingering'][hand])
+        musicxml['song_fingering']  = "t1: " + musicxml['song_fingering'][1] + " t2: " + musicxml['song_fingering'][0]
+        musicxml['hand_part'] = "t1: LA t2: RA"
         return musicxml
 
     @classmethod
@@ -172,18 +240,23 @@ class Synthesia:
         output = input_file.rsplit('.', 1)[0]
         musicxml_filename=f"{output}.musicxml"
         mscx_filename=f"{output}.mscx"
-        mxl_filename=f"{output}.mxl"
         try:
             subprocess.run(["musescore3", input_file, "-o", musicxml_filename])
             subprocess.run(["musescore3", input_file, "-o", mscx_filename])
-            subprocess.run(["musescore3", input_file, "-o", mxl_filename])
         except:
             print("File conversion failed. Is musescore in your search path ?")
             sys.exit(1)
 
-        unique_id = Synthesia.process_unique_id(mxl_filename)
+        xmldata = Synthesia.process_musicxml(musicxml_filename)
+        output_type = xmldata['file_type']
+        output_filename=f"{output}.{output_type}"
+        if output_type == "mxl":
+            subprocess.run(["musescore3", input_file, "-o", output_filename])
+        elif output_type == "mid":
+            midi_tracks = MidiConversion.midi_conversion(musicxml_filename)
+            MidiConversion.write_midi(midi_tracks, output_filename)
+        unique_id = Synthesia.process_unique_id(output_filename)
         metadata = Synthesia.process_metadata(mscx_filename)
-        musicxml = Synthesia.process_musicxml(musicxml_filename)
 
         song_xml = '<Song Version="1" ' + \
                'UniqueId="' + unique_id + '" ' + \
@@ -195,11 +268,11 @@ class Synthesia:
                'Arranger="' + str(metadata['arranger']) + '" ' + \
                'Copyright="' + str(metadata['copy_right']) + '" ' + \
                'Tags="' + str(metadata['tags']) + '" ' + \
-               'Parts="' + str(musicxml['hand_part']) + '" ' + \
+               'Parts="' + str(xmldata['hand_part']) + '" ' + \
                'Group="' + str(metadata['group']) + '" ' + \
                'Subgroup="' + str(metadata['subgroup']) + '" ' + \
-               'FingerHints="' + str(musicxml['song_fingering']) + '" ' + \
-               'Bookmarks="' + musicxml['bookmarks'] + '" ' + '/>'
+               'FingerHints="' + str(xmldata['song_fingering']) + '" ' + \
+               'Bookmarks="' + xmldata['bookmarks'] + '" ' + '/>'
         os.remove(f"{mscx_filename}")
         os.remove(f"{musicxml_filename}")
 
@@ -227,8 +300,7 @@ def main():
     groups=""
 
     metadata_text = \
-f"""
-<?xml version="1.0" encoding="UTF-8" ?>
+f"""<?xml version="1.0" encoding="UTF-8" ?>
 <SynthesiaMetadata Version="1">
   {songs}{groups}
 </SynthesiaMetadata>"""

@@ -86,19 +86,22 @@ The script requires one argument which is the folder where the music files can b
 <!-- GETTING STARTED -->
 ## Getting Started
 
-xml2synthesia.py:
-It is used from the command line.
+xml2synthesia.py is used from the command line.
 
-Type ./xml2synthesia.py <Folder with music files>
-
+Type: 
+```sh
+  ./xml2synthesia.py <Folder with music files>
+```
 The full list of arguments can be obtained by typing ./xml2synthesia.py -h
 
 
 ### Prerequisites
 
-Scripts work with linux and use Python 3.6+.
+- Musescore 3
+- Python 3.6+
+- Python modules mido and multitimer
 
-They should work on other platforms but you need to add Musescore 3. I haven't tried Windows and Mac, so there might be some issues.
+Scripts have been tested on Linux but they should work on other platforms.
 
 
 ### Installation
@@ -109,12 +112,12 @@ They should work on other platforms but you need to add Musescore 3. I haven't t
    ```
 2. Download and install Musescore 3
 
-
 3. Add Musescore to your search path (Not needed on Linux)
 
-4. Install the Mido library
+4. Install python modules 
    ```sh
    pip3 install mido
+   pip3 install multitimer
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

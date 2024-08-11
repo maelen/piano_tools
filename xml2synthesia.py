@@ -67,6 +67,8 @@ class Synthesia:
 
         tick = 0
         musicxml = {'song_fingering': [[],[]], 'bookmarks': [], 'hand_part': []}
+        #special_elements = musicxml_tree.xpath(".//ending | .//sound[@segno] | .//sound[@dalsegno] | .//sound[@tocoda] | .//sound[@dacapo]")
+        musicxml['file_type'] = "mid" #if special_elements else "mxl"
         i=0
         measures=part[0].xpath("measure")
         repeat_start = 0
@@ -211,10 +213,6 @@ class Synthesia:
                 repeat_direction = 'forward'
             elif repeat_direction == 'forward':
                 i += 1
-            if repeat_count > 0 and not musicxml['song_fingering'][0][-1]:
-                musicxml['song_fingering'][0] = musicxml['song_fingering'][0][:-1]
-                musicxml['song_fingering'][1] = musicxml['song_fingering'][1][:-1]
-                musicxml['bookmarks'] = musicxml['bookmarks'][:-1]
             if ending_stop is not None:
                 ending_count = ending_number[0]+1
                 ending_number = []
@@ -242,7 +240,6 @@ class Synthesia:
         output = input_file.rsplit('.', 1)[0]
         musicxml_filename=f"{output}.musicxml"
         mscx_filename=f"{output}.mscx"
-        midi_filename=f"{output}.mid"
         try:
             subprocess.run(["musescore3", input_file, "-o", musicxml_filename])
             subprocess.run(["musescore3", input_file, "-o", mscx_filename])
@@ -250,11 +247,16 @@ class Synthesia:
             print("File conversion failed. Is musescore in your search path ?")
             sys.exit(1)
 
-        midi_tracks = MidiConversion.midi_conversion(musicxml_filename)
-        MidiConversion.write_midi(midi_tracks, midi_filename)
-        unique_id = Synthesia.process_unique_id(midi_filename)
-        metadata = Synthesia.process_metadata(mscx_filename)
         xmldata = Synthesia.process_musicxml(musicxml_filename)
+        output_type = xmldata['file_type']
+        output_filename=f"{output}.{output_type}"
+        if output_type == "mxl":
+            subprocess.run(["musescore3", input_file, "-o", output_filename])
+        elif output_type == "mid":
+            midi_tracks = MidiConversion.midi_conversion(musicxml_filename)
+            MidiConversion.write_midi(midi_tracks, output_filename)
+        unique_id = Synthesia.process_unique_id(output_filename)
+        metadata = Synthesia.process_metadata(mscx_filename)
 
         song_xml = '<Song Version="1" ' + \
                'UniqueId="' + unique_id + '" ' + \
